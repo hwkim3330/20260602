@@ -732,4 +732,5 @@ module.exports = {
   addStreamCallback, removeStreamCallback,
   listInterfaces, resolveDevice, isAvailable, isTcpdumpAvailable, decodeFrame,
   getLastCaptureError, buildIfaceBpfFilter, isFastSendAvailable,
+  autofillSrcMac: _autofillSrcMac,
 };

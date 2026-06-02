@@ -68,6 +68,16 @@ router.post('/send', doSend);
 // POST /api/packet/send (alias)
 router.post('/packet/send', doSend);
 
+// POST /api/send-multi — fire a burst on several interfaces simultaneously
+// (one child process per interface, all firing at a shared wall-clock instant).
+// body: { interfaces:[...], count, chunk, startDelayMs, sync, + frame (blocks/flat) }
+router.post('/send-multi', async (req, res) => {
+  try {
+    const result = await require('../services/multiSend').sendMulti(req.body || {});
+    res.json({ ok: true, ...result });
+  } catch (err) { res.status(503).json({ ok: false, error: err.message }); }
+});
+
 // POST /api/probe-node
 router.post('/probe-node', async (req, res) => {
   try {

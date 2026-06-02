@@ -77,6 +77,18 @@ are on `main`.
   and placed at startup by `tools/cap-prebuilt.js`; (re)build via
   `npm run setup:winfast`. See `docs/PERFORMANCE.md`.
 
+## Simultaneous multi-interface send (POST /api/send-multi)
+- Fire a burst on several interfaces at the SAME wall-clock instant. One child
+  process per interface (`tools/sendworker.js`) using the sendqueue addon; all are
+  given a shared `startAt` epoch-ms and busy-wait to fire together, so the bursts
+  run truly in parallel (separate processes/cores), not the single-threaded
+  sequential path. `services/multiSend.js` orchestrates; each interface's frame
+  gets its own NIC MAC auto-filled. body: { interfaces:[...], count, chunk,
+  startDelayMs, sync, + frame (blocks/flat) }. Returns per-interface
+  frames/bytes/gbps/skewMs + maxStartSkewMs + aggregateGbps.
+- Measured: 2 USB NICs fired with **maxStartSkewMs = 0** (synchronized start),
+  500k×1514B each in parallel.
+
 ## Optional Linux fast engine (txgen/rxcap)
 - `services/fastEngine.js` + `GET /api/packet/engines` + `engine:"fast"` on
   `/api/send` + `POST /api/capture/measure`. Gated to Linux + installed binaries;
