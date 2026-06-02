@@ -237,6 +237,14 @@ curl localhost:8080/api/packet/engines      # engines.fast.available == true 면
 
 ---
 
+## 문서 (docs)
+
+- [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) — 송신/캡처 처리량 실측, `cap` 경로가
+  ~124 Mbps에서 막히는 이유, **JS로 1 G/10 G가 가능한지**와 그 방법(배치 전송 / Linux txgen).
+- [`docs/CHANGELOG.md`](docs/CHANGELOG.md) — 버그 수정·개선 내역(커밋 기준).
+
+---
+
 ## 프로젝트 구조
 
 ```
