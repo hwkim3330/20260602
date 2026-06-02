@@ -45,7 +45,8 @@ router.get('/capture/status', async (req, res) => {
       selected: st.captureInterfaces.includes(i.name)
     }));
     res.json({ ok: true, running: st.capturing, capturing: st.capturing,
-               totalPackets: st.captureCount, captureCount: st.captureCount, interfaces: ifaces });
+               totalPackets: st.captureCount, captureCount: st.captureCount,
+               captureDropped: st.captureDropped, captureCap: st.captureCap, interfaces: ifaces });
   } catch (err) { workerErr(res, err); }
 });
 

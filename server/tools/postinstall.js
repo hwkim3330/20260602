@@ -30,6 +30,19 @@ if (process.platform === 'win32') {
   // Spawn as a child so its exit code never fails this install.
   spawnSync(process.execPath, [path.join(__dirname, 'setup-cap-windows.js')], { stdio: 'inherit' });
 } else {
-  console.warn('[postinstall] cap not loadable. On Linux: sudo apt install libpcap-dev build-essential && npm rebuild cap');
+  // Linux/macOS: the committed cap.node is almost always built for another OS
+  // (e.g. the Windows binary) or a different Node ABI, so a fresh clone needs a
+  // local rebuild. Mirror the Windows self-heal and rebuild from source. Never
+  // fail the install — fall back to the manual hint if the toolchain is missing.
+  console.log(`[postinstall] cap not loadable on ${process.platform} — rebuilding from source...`);
+  const r = spawnSync('npm', ['rebuild', 'cap'], { stdio: 'inherit', cwd: path.join(__dirname, '..') });
+  if (r.status === 0 && capLoads()) {
+    console.log('[postinstall] cap rebuilt successfully (send + capture available).');
+  } else {
+    console.warn('[postinstall] cap rebuild failed — packet capture will use the tcpdump fallback (capture only).');
+    console.warn('[postinstall] For native send+capture, install build deps then `npm rebuild cap`:');
+    console.warn('[postinstall]   Debian/Ubuntu: sudo apt install -y libpcap-dev build-essential python3');
+    console.warn('[postinstall]   macOS:         xcode-select --install   (libpcap ships with the OS)');
+  }
 }
 process.exit(0);
