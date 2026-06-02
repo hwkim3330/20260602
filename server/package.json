@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "switch:deep-report": "node tools/switchDeepReport.js",
-    "install-native": "npm install serialport cap --save-optional"
+    "install-native": "npm install serialport cap --save-optional",
+    "setup:windows-cap": "node tools/setup-cap-windows.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

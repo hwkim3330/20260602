@@ -68,6 +68,33 @@ sudo apt install -y git nodejs npm tcpdump libpcap-dev build-essential
 | 패킷 캡처 (tcpdump) | `+ tcpdump` |
 | 패킷 전송 + 캡처 (libpcap) | `+ libpcap-dev build-essential` |
 
+### Windows (Npcap)
+
+Windows에서도 패킷 송신/캡처가 동작합니다 (`cap` npm + Npcap). `cap`은 Windows용
+prebuilt 바이너리를 제공하지 않으므로 **현재 머신에서 한 번 빌드**해야 합니다.
+
+사전 설치 (1회):
+
+1. **Npcap** 런타임 — https://npcap.com/#download (설치 시 *"WinPcap API-compatible Mode"* 권장)
+2. **Visual Studio Build Tools** — "Desktop development with C++" 워크로드
+3. **Python 3** — https://www.python.org/ (node-gyp 의존성)
+
+빌드:
+
+```powershell
+cd server
+npm install
+npm run setup:windows-cap   # Npcap SDK 자동 다운로드 + cap.node 재빌드
+node server.js
+```
+
+`setup:windows-cap`은 Npcap SDK를 받아 `node_modules/cap/deps/winpcap`에 배치하고
+`cap.node`를 현재 Node/아키텍처에 맞게 다시 빌드합니다. 성공 시
+`[PacketLabManager] Packets : cap npm ready (send+capture)` 가 출력됩니다.
+
+> 참고: `node_modules`에 커밋된 `cap.node`는 빌드된 OS 전용입니다. **다른 OS로 옮기면
+> `npm rebuild cap`(Linux/macOS) 또는 `npm run setup:windows-cap`(Windows)으로 재빌드**하세요.
+
 ---
 
 ## 설치 및 실행 (Quick Start)
