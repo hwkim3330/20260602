@@ -60,11 +60,23 @@ router.post('/start', async (req, res) => {
       signal: AbortSignal.timeout(6000)
     }).catch(() => {});
 
+    // Forward the same capture options a direct /api/capture/start call accepts,
+    // so remote (Node B) capture stays consistent with local (Node A) capture.
+    // In particular `promisc` must pass through: without it the peer defaults to
+    // the restrictive "ether dst <mymac> or broadcast or multicast" filter and
+    // silently drops forwarded unicast that a local promisc capture would keep.
+    const { promisc, srcMac, dstMac, etherType } = req.body || {};
     const bpfFilter = (req.body?.bpfFilter || '').trim();
+    const startBody = { interfaces };
+    if (promisc !== undefined) startBody.promisc   = promisc;
+    if (bpfFilter)             startBody.bpfFilter  = bpfFilter;
+    if (srcMac)                startBody.srcMac     = srcMac;
+    if (dstMac)                startBody.dstMac     = dstMac;
+    if (etherType)             startBody.etherType  = etherType;
     const resp = await nodeFetch(`${base}/api/capture/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ interfaces, ...(bpfFilter ? { bpfFilter } : {}) }),
+      body: JSON.stringify(startBody),
       signal: AbortSignal.timeout(12000)  // extra time for the 350ms stabilize wait
     });
     const data = await resp.json().catch(() => ({}));
