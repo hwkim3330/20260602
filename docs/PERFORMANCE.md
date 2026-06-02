@@ -98,6 +98,37 @@ shortfall is the **Linux tcpdump + JS-decode capture path dropping** at >0.5 Gbp
 not wire loss — accurate counting at line rate needs **rxcap** (AF_PACKET batch +
 `SO_RXQ_OVFL` kernel-drop counting), which must be built on the Linux box.
 
+## Languages & roles — is it Python? is Node enough?
+
+**Python is NOT used at runtime or anywhere in the packet path.** It is only a
+build-time dependency of `node-gyp`, which compiles the C addons. Because the
+compiled binaries are shipped as prebuilts (`server/prebuilds/...`), end users
+don't even need Python to run.
+
+| Layer | Tech | Role | At runtime? |
+|-------|------|------|:-----------:|
+| Web UI | HTML / JS (browser) | tabs, packet builder, tables | yes |
+| App / orchestration | **Node.js** | HTTP API, build frames, drive engines, capture buffer, 2-PC | yes |
+| Packet TX/RX engine | **C** (cap = Npcap/libpcap; `sendqueue` addon; Linux txgen/rxcap) | the actual send/capture | yes |
+| Build glue | **Python + node-gyp + C/C++ compiler** | compile the C addons **once** | **no** (build-time only; not needed with prebuilt) |
+
+So: **app = Node, engine = C, build glue = Python (one time).** Node is not the
+bottleneck — it builds one frame and hands a batch to the C engine.
+
+### Send throughput by approach (1514 B, this box)
+
+| Approach | Languages | Send API | Throughput |
+|----------|-----------|----------|-----------:|
+| Node + `cap` per-packet | JS → C | `pcap_sendpacket` ×N (1 syscall/pkt) | ~124 Mbps |
+| Node + `sendqueue` v1 | JS → C | Npcap send-queue, rebuilt per chunk | ~0.66–0.76 Gbps |
+| **Node + `sendqueue` v2** | JS → C | Npcap send-queue, **built once, transmit many** | **~0.93 Gbps (≈ line rate)** |
+| Linux `txgen` (reference) | C | AF_PACKET + `sendmmsg` | ~0.96 Gbps (README) |
+
+"Why wasn't pure Node enough?" — not a language limit: the `cap` npm module only
+exposes one-packet-at-a-time send, so JS issued one syscall per packet (~124 Mbps).
+The win was switching to a **batched** native send (the C addon), still fully
+driven by Node. Same JS, ~7.5× the throughput.
+
 ## Bottom line
 
 | Path | 1 Gbps | 10 Gbps |
