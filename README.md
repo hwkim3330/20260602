@@ -83,17 +83,24 @@ prebuilt 바이너리를 제공하지 않으므로 **현재 머신에서 한 번
 
 ```powershell
 cd server
-npm install
-npm run setup:windows-cap   # Npcap SDK 자동 다운로드 + cap.node 재빌드
+npm install     # postinstall 이 cap 로드 가능 여부를 확인하고, 필요 시 자동 재빌드
 node server.js
 ```
 
-`setup:windows-cap`은 Npcap SDK를 받아 `node_modules/cap/deps/winpcap`에 배치하고
-`cap.node`를 현재 Node/아키텍처에 맞게 다시 빌드합니다. 성공 시
-`[PacketLabManager] Packets : cap npm ready (send+capture)` 가 출력됩니다.
+저장소에는 **Windows용 `cap.node`가 커밋**되어 있어, Npcap 런타임만 설치돼 있으면
+같은 Node/아키텍처에서는 클론 후 바로 실행됩니다. ABI/플랫폼이 다르면 `npm install`의
+**postinstall** 훅(`tools/postinstall.js`)이 자동으로 Npcap SDK를 받아
+`cap.node`를 재빌드합니다. 수동 재빌드는:
 
-> 참고: `node_modules`에 커밋된 `cap.node`는 빌드된 OS 전용입니다. **다른 OS로 옮기면
-> `npm rebuild cap`(Linux/macOS) 또는 `npm run setup:windows-cap`(Windows)으로 재빌드**하세요.
+```powershell
+npm run setup:windows-cap
+```
+
+성공 시 `[PacketLabManager] Packets : cap npm ready (send+capture)` 가 출력됩니다.
+
+> 참고: 커밋된 `cap.node`는 **Windows 빌드**입니다. **Linux/macOS에서는
+> `npm rebuild cap`** (또는 `npm install`의 postinstall) 으로 해당 OS용 libpcap에 맞게
+> 재빌드됩니다(Linux 빌드는 `deps/winpcap` 대신 시스템 `-lpcap`을 사용하므로 무관).
 
 ---
 
