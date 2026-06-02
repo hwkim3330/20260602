@@ -61,15 +61,21 @@ are on `main`.
 - **`npm run setup:windows-cap`** + a non-fatal `postinstall` rebuild cap from the
   Npcap SDK when the committed binary doesn't match the platform/ABI. (`2ce68bf`, `a1ad8f8`)
 
-## Windows high-rate TX — Npcap send-queue (engine:"sendqueue")
-- New native addon `server/native/sendqueue` (Npcap `pcap_sendqueue_transmit`):
-  queues many frames and sends them with one driver call per chunk instead of one
-  `pcap_sendpacket` per packet. Exposed as `engine:"sendqueue"` on `/api/send` and
-  reported by `/api/packet/engines`. Measured ~0.43–0.66 Gbps @1514B on a USB
-  2.5GbE NIC (~4–5× the per-packet path; USB-adapter limited, not software).
-  Prebuilt shipped under `server/prebuilds/.../sendqueue.node` and placed at startup
-  by `tools/cap-prebuilt.js`; rebuild via `npm run setup:winfast`. See
-  `docs/PERFORMANCE.md`.
+## High-rate TX — one cross-platform addon (engine:"sendqueue")
+- New native addon `server/native/sendqueue` — **one C file, two backends via
+  `#ifdef`**: Windows uses the Npcap send-queue (`pcap_sendqueue_transmit`), Linux
+  uses an AF_PACKET raw socket + `sendmmsg()`. Both queue many frames and hand them
+  to the driver in one call per chunk instead of one `pcap_sendpacket` per packet.
+  Same JS API and same `engine:"sendqueue"` on both OSes.
+- Exposed as `engine:"sendqueue"` on `/api/send`, reported by `/api/packet/engines`.
+- **Windows: measured ~0.43–0.66 Gbps @1514B** on a USB 2.5GbE NIC (~4–5× the
+  per-packet path; USB-adapter limited, not software — PCIe should hit 1 Gbps).
+- **Linux backend (sendmmsg/AF_PACKET) is written but not yet run here** (no Linux
+  toolchain on the dev box) — build with `npm run setup:winfast` equivalent
+  (`node-gyp rebuild`) on Linux; needs root/CAP_NET_RAW.
+- Prebuilt shipped under `server/prebuilds/<plat>-<arch>/node-v<ABI>/sendqueue.node`
+  and placed at startup by `tools/cap-prebuilt.js`; (re)build via
+  `npm run setup:winfast`. See `docs/PERFORMANCE.md`.
 
 ## Optional Linux fast engine (txgen/rxcap)
 - `services/fastEngine.js` + `GET /api/packet/engines` + `engine:"fast"` on

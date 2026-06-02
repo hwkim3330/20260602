@@ -55,6 +55,10 @@ const r = spawnSync(process.execPath, [gypJs, 'rebuild', '--arch=' + process.arc
   { cwd: SQ, stdio: 'inherit', env: process.env });
 if (r.status !== 0) die('node-gyp build failed — ensure VS Build Tools (Desktop C++) + Python.');
 
+// wpcap.dll lives in System32\Npcap — make it reachable for the load check.
+const npcap = 'C:\\Windows\\System32\\Npcap';
+if (fs.existsSync(npcap) && process.env.PATH && !process.env.PATH.includes(npcap))
+  process.env.PATH = npcap + ';' + process.env.PATH;
 try {
   require(path.join(SQ, 'build', 'Release', 'sendqueue.node'));
   console.log('[winfast] OK — engine:"sendqueue" available. Saving prebuilt...');

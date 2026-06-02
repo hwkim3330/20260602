@@ -1,12 +1,25 @@
-// sendqueue.cc — minimal Npcap send-queue addon for high-rate TX on Windows.
-// Exposes transmit(deviceName, frameBuffer, count, chunk, sync) which queues
-// `count` copies of the frame via pcap_sendqueue_* and blasts them with
-// pcap_sendqueue_transmit (ONE driver call per chunk) — far faster than
-// per-packet pcap_sendpacket. Returns { ok, frames, bytes, error }.
+// sendqueue.cc — cross-platform high-rate Ethernet TX addon.
+//   Windows: Npcap send-queue (pcap_sendqueue_alloc/queue/transmit) — one driver
+//            call per chunk instead of one pcap_sendpacket per packet.
+//   Linux:   AF_PACKET raw socket + sendmmsg() — one syscall per batch.
+// Same JS API on both:  transmit(deviceName, frameBuffer, count, chunk, sync)
+//                        -> { ok, frames, bytes, error }
+// (sync only meaningful on Windows; Linux blasts as fast as possible.)
 #include <nan.h>
-#include <pcap.h>
 #include <string.h>
 #include <stdio.h>
+
+#ifdef _WIN32
+  #include <pcap.h>
+#else
+  #include <errno.h>
+  #include <unistd.h>
+  #include <sys/socket.h>
+  #include <linux/if_packet.h>
+  #include <net/ethernet.h>
+  #include <net/if.h>
+  #include <vector>
+#endif
 
 using namespace Nan;
 
@@ -17,51 +30,76 @@ NAN_METHOD(Transmit) {
   }
   Nan::Utf8String dev(info[0]);
   v8::Local<v8::Object> bufObj = info[1].As<v8::Object>();
-  const u_char* frame = (const u_char*)node::Buffer::Data(bufObj);
-  size_t frameLen = node::Buffer::Length(bufObj);
-  uint32_t count  = Nan::To<uint32_t>(info[2]).FromMaybe(0);
-  uint32_t chunk  = info[3]->IsUndefined() ? 1000u : Nan::To<uint32_t>(info[3]).FromMaybe(1000);
-  int sync        = info[4]->IsUndefined() ? 0 : Nan::To<int32_t>(info[4]).FromMaybe(0);
+  const unsigned char* frame = (const unsigned char*)node::Buffer::Data(bufObj);
+  size_t   frameLen = node::Buffer::Length(bufObj);
+  uint32_t count    = Nan::To<uint32_t>(info[2]).FromMaybe(0);
+  uint32_t chunk    = info[3]->IsUndefined() ? 1000u : Nan::To<uint32_t>(info[3]).FromMaybe(1000);
+  int      sync     = info[4]->IsUndefined() ? 0 : Nan::To<int32_t>(info[4]).FromMaybe(0);
   if (chunk == 0) chunk = 1000;
   if (frameLen == 0 || count == 0) { Nan::ThrowError("empty frame or count"); return; }
-
-  char errbuf[PCAP_ERRBUF_SIZE] = {0};
-  pcap_t* p = pcap_open_live(*dev, 65536, 0, 1000, errbuf);
-  if (!p) { Nan::ThrowError(errbuf[0] ? errbuf : "pcap_open_live failed"); return; }
 
   uint64_t framesSent = 0, bytesSent = 0;
   bool ok = true;
   char emsg[256] = {0};
-  const size_t hdrSz = sizeof(struct pcap_pkthdr);
 
+#ifdef _WIN32
+  char errbuf[PCAP_ERRBUF_SIZE] = {0};
+  pcap_t* p = pcap_open_live(*dev, 65536, 0, 1000, errbuf);
+  if (!p) { Nan::ThrowError(errbuf[0] ? errbuf : "pcap_open_live failed"); return; }
+  const size_t hdrSz = sizeof(struct pcap_pkthdr);
   uint32_t remaining = count;
   while (remaining > 0 && ok) {
     uint32_t n = (remaining < chunk) ? remaining : chunk;
     u_int memsize = (u_int)((frameLen + hdrSz) * (size_t)n);
     pcap_send_queue* q = pcap_sendqueue_alloc(memsize);
     if (!q) { ok = false; snprintf(emsg, sizeof(emsg), "sendqueue_alloc(%u) failed", memsize); break; }
-
-    struct pcap_pkthdr hdr;
-    memset(&hdr, 0, sizeof(hdr));
-    hdr.caplen = (bpf_u_int32)frameLen;
-    hdr.len    = (bpf_u_int32)frameLen;
-
+    struct pcap_pkthdr hdr; memset(&hdr, 0, sizeof(hdr));
+    hdr.caplen = (bpf_u_int32)frameLen; hdr.len = (bpf_u_int32)frameLen;
     uint32_t queued = 0;
-    for (uint32_t i = 0; i < n; i++) {
-      if (pcap_sendqueue_queue(q, &hdr, frame) < 0) break;
-      queued++;
-    }
-    u_int qlen = q->len;                       // total queued bytes (incl. headers)
+    for (uint32_t i = 0; i < n; i++) { if (pcap_sendqueue_queue(q, &hdr, frame) < 0) break; queued++; }
+    u_int qlen = q->len;
     u_int sent = pcap_sendqueue_transmit(p, q, sync);
     pcap_sendqueue_destroy(q);
-
-    framesSent += queued;
-    bytesSent  += (uint64_t)queued * frameLen;
-    if (queued < n)   { ok = false; snprintf(emsg, sizeof(emsg), "queued %u of %u", queued, n); }
+    framesSent += queued; bytesSent += (uint64_t)queued * frameLen;
+    if (queued < n)       { ok = false; snprintf(emsg, sizeof(emsg), "queued %u of %u", queued, n); }
     else if (sent < qlen) { ok = false; snprintf(emsg, sizeof(emsg), "transmit short: %u of %u bytes", sent, qlen); }
     remaining -= n;
   }
   pcap_close(p);
+#else
+  unsigned int ifidx = if_nametoindex(*dev);
+  if (ifidx == 0) { Nan::ThrowError("if_nametoindex failed (no such interface)"); return; }
+  int fd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+  if (fd < 0) { Nan::ThrowError("socket(AF_PACKET) failed (need root / CAP_NET_RAW)"); return; }
+
+  struct sockaddr_ll addr; memset(&addr, 0, sizeof(addr));
+  addr.sll_family  = AF_PACKET;
+  addr.sll_ifindex = ifidx;
+  addr.sll_halen   = ETH_ALEN;
+  memcpy(addr.sll_addr, frame, ETH_ALEN);   // dst MAC from the frame
+
+  // sendmmsg vlen is capped (UIO_MAXIOV ~1024); cap the batch accordingly.
+  uint32_t batch = chunk > 1024 ? 1024 : chunk;
+  struct iovec iov; iov.iov_base = (void*)frame; iov.iov_len = frameLen;
+  std::vector<struct mmsghdr> msgs(batch);
+  for (uint32_t i = 0; i < batch; i++) {
+    memset(&msgs[i], 0, sizeof(struct mmsghdr));
+    msgs[i].msg_hdr.msg_iov     = &iov;
+    msgs[i].msg_hdr.msg_iovlen  = 1;
+    msgs[i].msg_hdr.msg_name    = &addr;
+    msgs[i].msg_hdr.msg_namelen = sizeof(addr);
+  }
+  uint32_t remaining = count;
+  while (remaining > 0 && ok) {
+    uint32_t n = (remaining < batch) ? remaining : batch;
+    int r = sendmmsg(fd, msgs.data(), n, 0);
+    if (r < 0) { ok = false; snprintf(emsg, sizeof(emsg), "sendmmsg: %s", strerror(errno)); break; }
+    framesSent += (uint32_t)r; bytesSent += (uint64_t)r * frameLen;
+    remaining  -= (uint32_t)r;
+    if ((uint32_t)r < n) continue; // short send: loop sends the remainder
+  }
+  close(fd);
+#endif
 
   v8::Local<v8::Object> res = Nan::New<v8::Object>();
   Nan::Set(res, Nan::New("ok").ToLocalChecked(),     Nan::New<v8::Boolean>(ok));
