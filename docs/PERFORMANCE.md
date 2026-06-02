@@ -65,12 +65,16 @@ packet. Measured on the same USB 2.5GbE NIC, 1514 B frames:
 | Path | pps | Throughput |
 |------|----:|-----------:|
 | `cap` per-packet | ~10,000 | ~124 Mbps |
-| **`sendqueue` (Npcap batch)** | **~35,000–54,000** | **~0.43–0.66 Gbps** |
+| `sendqueue` v1 (rebuild queue per chunk) | ~54,000 | ~0.66–0.76 Gbps |
+| **`sendqueue` v2 (build queue once, transmit many)** | **~77,000** | **~0.92–0.93 Gbps** |
 
-That's ~4–5× faster. Chunk size (2k–32k) made no difference, so the remaining
-limit is the **USB 2.5GbE adapter / USB path**, not the software — a PCIe NIC
-would likely reach 1 Gbps line rate. JS is not the bottleneck: it only builds
-the frame once; the addon does the batched transmit.
+The v1→v2 jump came from building the send-queue **once** and calling
+`pcap_sendqueue_transmit` on it repeatedly, instead of re-queuing (memcpy-ing)
+every frame for each chunk. At 1514 B, 1 GbE line rate is ~0.98 Gbps of frame
+bytes, so **~0.93 Gbps is effectively line rate** (the rest is USB/driver + IFG
+overhead). Verified end-to-end through `/api/send {engine:"sendqueue"}`:
+1,000,000 × 1514 B in 12.97 s = **0.934 Gbps**. So 1 GbE IS reached on Windows
+with this method; JS is not the bottleneck (it builds one frame, the addon blasts).
 
 ## Real over-the-wire test (Windows → Linux, 2.5GbE link)
 
@@ -99,7 +103,7 @@ not wire loss — accurate counting at line rate needs **rxcap** (AF_PACKET batc
 | Path | 1 Gbps | 10 Gbps |
 |------|:------:|:-------:|
 | Windows, current `cap` (per-packet) | ❌ (~124 Mbps) | ❌ |
-| Windows + Npcap send-queue (`engine:"sendqueue"`) | ☑ ~0.66 Gbps here (USB-NIC limited; ✅ likely on PCIe) | ❌ (small frames) |
+| Windows + Npcap send-queue (`engine:"sendqueue"`) | ✅ **~0.93 Gbps measured @1514B** (≈ line rate) | ❌ (small frames) |
 | Linux `txgen`/`rxcap` (sendmmsg/recvmmsg) | ✅ (963 Mbps measured) | ☑ large frames; 64 B needs DPDK |
 
 > `engine:"sendqueue"` is synchronous (blocks for the burst duration) and is for a

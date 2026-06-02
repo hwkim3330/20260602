@@ -48,24 +48,42 @@ NAN_METHOD(Transmit) {
   pcap_t* p = pcap_open_live(*dev, 65536, 0, 1000, errbuf);
   if (!p) { Nan::ThrowError(errbuf[0] ? errbuf : "pcap_open_live failed"); return; }
   const size_t hdrSz = sizeof(struct pcap_pkthdr);
+  struct pcap_pkthdr hdr; memset(&hdr, 0, sizeof(hdr));
+  hdr.caplen = (bpf_u_int32)frameLen; hdr.len = (bpf_u_int32)frameLen;
+
+  // Build ONE queue of `per` identical frames, then transmit it repeatedly. This
+  // does the per-frame memcpy into the queue once instead of `count` times — the
+  // transmit (the actual DMA/USB blast) is what repeats.
+  uint32_t per = (count < chunk) ? count : chunk;
+  u_int memsize = (u_int)((frameLen + hdrSz) * (size_t)per);
+  pcap_send_queue* q = pcap_sendqueue_alloc(memsize);
+  if (!q) { pcap_close(p); snprintf(emsg, sizeof(emsg), "sendqueue_alloc(%u) failed", memsize); Nan::ThrowError(emsg); return; }
+  uint32_t built = 0;
+  for (uint32_t i = 0; i < per; i++) { if (pcap_sendqueue_queue(q, &hdr, frame) < 0) break; built++; }
+  if (built < per) { pcap_sendqueue_destroy(q); pcap_close(p); Nan::ThrowError("sendqueue_queue failed while building"); return; }
+  u_int qlen = q->len;
+
   uint32_t remaining = count;
-  while (remaining > 0 && ok) {
-    uint32_t n = (remaining < chunk) ? remaining : chunk;
-    u_int memsize = (u_int)((frameLen + hdrSz) * (size_t)n);
-    pcap_send_queue* q = pcap_sendqueue_alloc(memsize);
-    if (!q) { ok = false; snprintf(emsg, sizeof(emsg), "sendqueue_alloc(%u) failed", memsize); break; }
-    struct pcap_pkthdr hdr; memset(&hdr, 0, sizeof(hdr));
-    hdr.caplen = (bpf_u_int32)frameLen; hdr.len = (bpf_u_int32)frameLen;
-    uint32_t queued = 0;
-    for (uint32_t i = 0; i < n; i++) { if (pcap_sendqueue_queue(q, &hdr, frame) < 0) break; queued++; }
-    u_int qlen = q->len;
+  while (remaining >= per && ok) {
     u_int sent = pcap_sendqueue_transmit(p, q, sync);
-    pcap_sendqueue_destroy(q);
-    framesSent += queued; bytesSent += (uint64_t)queued * frameLen;
-    if (queued < n)       { ok = false; snprintf(emsg, sizeof(emsg), "queued %u of %u", queued, n); }
-    else if (sent < qlen) { ok = false; snprintf(emsg, sizeof(emsg), "transmit short: %u of %u bytes", sent, qlen); }
-    remaining -= n;
+    if (sent < qlen) { ok = false; snprintf(emsg, sizeof(emsg), "transmit short: %u of %u bytes", sent, qlen); break; }
+    framesSent += per; bytesSent += (uint64_t)per * frameLen;
+    remaining -= per;
   }
+  // Remainder (< per): a small one-off queue.
+  if (ok && remaining > 0) {
+    pcap_send_queue* q2 = pcap_sendqueue_alloc((u_int)((frameLen + hdrSz) * (size_t)remaining));
+    if (q2) {
+      uint32_t b2 = 0;
+      for (uint32_t i = 0; i < remaining; i++) { if (pcap_sendqueue_queue(q2, &hdr, frame) < 0) break; b2++; }
+      u_int q2len = q2->len;
+      u_int sent2 = pcap_sendqueue_transmit(p, q2, sync);
+      pcap_sendqueue_destroy(q2);
+      if (b2 == remaining && sent2 >= q2len) { framesSent += remaining; bytesSent += (uint64_t)remaining * frameLen; }
+      else { ok = false; snprintf(emsg, sizeof(emsg), "remainder transmit short"); }
+    }
+  }
+  pcap_sendqueue_destroy(q);
   pcap_close(p);
 #else
   unsigned int ifidx = if_nametoindex(*dev);
