@@ -326,6 +326,16 @@ function _dropSendHandle(dev) {
 
 // ── Send ───────────────────────────────────────────────────────────────────────
 
+// True when the built frame differs per packet (only a 'random' payload does now
+// that the "_<seq>" suffix is gone). When false, a burst can reuse one frame.
+function _payloadVaries(profile) {
+  const pl = profile.payload;
+  if (pl && String(pl.mode || '').toLowerCase() === 'random') return true;
+  if (Array.isArray(profile.blocks))
+    return profile.blocks.some(b => b && b.type === 'Payload' && String(b.mode || '').toLowerCase() === 'random');
+  return false;
+}
+
 async function sendPackets(profile) {
   if (!Cap) throw new Error('cap npm not installed (run: npm install cap)');
 
@@ -346,26 +356,34 @@ async function sendPackets(profile) {
   // UI-facing interface label (OS name) — may differ from the pcap device name.
   const label = profile.interface || dev;
 
+  // High-throughput path: for large bursts, build the frame ONCE and reuse it,
+  // and skip per-packet capture bookkeeping (decode + sorted insert) which
+  // otherwise dominates CPU and grows the capture buffer to millions of rows.
+  // Small/functional sends keep the per-packet path so IP id / seq still vary.
+  const BULK    = count > 1000;
+  const varies  = _payloadVaries(profile);           // only 'random' payload varies
+  const fixedFrame = (BULK && !varies) ? buildFrame(profile, 0) : null;
+  if (fixedFrame && fixedFrame.length > 65535) throw new Error(`Frame too large: ${fixedFrame.length} bytes`);
+
   _sendInFlight.add(dev);
   try {
     const handle = _getSendHandle(dev, profile.interface);
     let sent = 0, bytes = 0;
+    if (BULK && fixedFrame) _registerTxEcho(dev, fixedFrame); // suppress at least one echo
     for (let i = 0; i < count; i++) {
-      const frame = buildFrame(profile, i);
-      if (frame.length > 65535) throw new Error(`Frame too large: ${frame.length} bytes`);
-      // Register the TX-echo dedup key BEFORE injecting the frame. libpcap can
-      // surface our own injected frame on the capture handle before the post-send
-      // bookkeeping runs; registering first guarantees the echo is suppressed
-      // instead of being shown as a duplicate RX row.
-      _registerTxEcho(dev, frame);
+      const frame = fixedFrame || buildFrame(profile, i);
+      if (!fixedFrame && frame.length > 65535) throw new Error(`Frame too large: ${frame.length} bytes`);
+      // Register the TX-echo dedup key BEFORE injecting (per-packet for small sends).
+      if (!BULK) _registerTxEcho(dev, frame);
       handle.cap.send(frame, frame.length);
       sent++;
       bytes += frame.length;
-      // Record the TX frame into the capture buffer (libpcap may not echo it back).
-      _recordTxFrame(dev, label, frame);
+      // Record each TX frame for small sends; bulk sends get one summary row below.
+      if (!BULK) _recordTxFrame(dev, label, frame);
       if (intervalMs > 0 && i < count - 1)
         await new Promise(r => setTimeout(r, intervalMs));
     }
+    if (BULK && fixedFrame) _recordTxFrame(dev, label, fixedFrame); // single representative TX row
     return { framesSent: sent, bytesSent: bytes };
   } catch (err) {
     _dropSendHandle(dev); // discard broken handle; next call will recreate
