@@ -1,0 +1,166 @@
+[
+  {
+    "eventType": "registerWrite",
+    "offset": "0x44A00080",
+    "value": "0x00610000",
+    "name": "Port0_MDIO_Enable"
+  },
+  {
+    "eventType": "registerWrite",
+    "offset": "0x44A00090",
+    "value": "0x80010000",
+    "name": "Port0_BMSR_Read_Trigger"
+  },
+  {
+    "eventType": "registerExpect",
+    "offset": "0x44A00090",
+    "mask": "0x80000004",
+    "expected": "0x00000004",
+    "timeoutMs": 100,
+    "name": "Port0_LinkUp_Wait"
+  },
+  {
+    "eventType": "registerWrite",
+    "offset": "0x44A000C0",
+    "value": "0x00610000",
+    "name": "Port1_MDIO_Enable"
+  },
+  {
+    "eventType": "registerWrite",
+    "offset": "0x44A000D0",
+    "value": "0x80810000",
+    "name": "Port1_BMSR_Read_Trigger"
+  },
+  {
+    "eventType": "registerExpect",
+    "offset": "0x44A000D0",
+    "mask": "0x80000004",
+    "expected": "0x00000004",
+    "timeoutMs": 100,
+    "name": "Port1_LinkUp_Wait"
+  },
+  {
+    "eventType": "registerWrite",
+    "offset": "0x44A00100",
+    "value": "0x00610000",
+    "name": "Port2_MDIO_Enable"
+  },
+  {
+    "eventType": "registerWrite",
+    "offset": "0x44A00110",
+    "value": "0x80A10000",
+    "name": "Port2_BMSR_Read_Trigger"
+  },
+  {
+    "eventType": "registerExpect",
+    "offset": "0x44A00110",
+    "mask": "0x80000004",
+    "expected": "0x00000004",
+    "timeoutMs": 100,
+    "name": "Port2_LinkUp_Wait"
+  },
+  {
+    "eventType": "registerWrite",
+    "offset": "0x44A00140",
+    "value": "0x00610000",
+    "name": "Port3_MDIO_Enable"
+  },
+  {
+    "eventType": "registerWrite",
+    "offset": "0x44A00150",
+    "value": "0x81010000",
+    "name": "Port3_BMSR_Read_Trigger"
+  },
+  {
+    "eventType": "registerExpect",
+    "offset": "0x44A00150",
+    "mask": "0x80000004",
+    "expected": "0x00000004",
+    "timeoutMs": 100,
+    "name": "Port3_LinkUp_Wait"
+  },
+  {
+    "eventType": "registerWrite",
+    "offset": "0x44A00180",
+    "value": "0x00610000",
+    "name": "Port4_MDIO_Enable"
+  },
+  {
+    "eventType": "registerWrite",
+    "offset": "0x44A00190",
+    "value": "0x81410000",
+    "name": "Port4_BMSR_Read_Trigger"
+  },
+  {
+    "eventType": "registerExpect",
+    "offset": "0x44A00190",
+    "mask": "0x80000004",
+    "expected": "0x00000004",
+    "timeoutMs": 100,
+    "name": "Port4_LinkUp_Wait"
+  },
+  {
+    "eventType": "registerWrite",
+    "offset": "0x44A001c0",
+    "value": "0x00610000",
+    "name": "Port5_MDIO_Enable"
+  },
+  {
+    "eventType": "registerWrite",
+    "offset": "0x44A001D0",
+    "value": "0x81810000",
+    "name": "Port5_BMSR_Read_Trigger"
+  },
+  {
+    "eventType": "registerExpect",
+    "offset": "0x44A001D0",
+    "mask": "0x80000004",
+    "expected": "0x00000004",
+    "timeoutMs": 100,
+    "name": "Port5_LinkUp_Wait"
+  },
+  {
+    "eventType": "delay",
+    "delayMs": 500
+  },
+  {
+    "eventType": "delay",
+    "delayMs": 500
+  },
+  {
+    "eventType": "delay",
+    "delayMs": 500
+  },
+  {
+    "eventType": "delay",
+    "delayMs": 500
+  },
+  {
+    "eventType": "delay",
+    "delayMs": 500
+  },
+  {
+    "eventType": "delay",
+    "delayMs": 500
+  },
+  {
+    "eventType": "delay",
+    "delayMs": 500
+  },
+  {
+    "eventType": "delay",
+    "delayMs": 500
+  },
+  {
+    "eventType": "delay",
+    "delayMs": 100
+  },
+  {
+    "eventType": "delay",
+    "delayMs": 100
+  },
+  {
+    "eventType": "delay",
+    "delayMs": 500
+  }
+]

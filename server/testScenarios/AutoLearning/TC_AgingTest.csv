@@ -1,0 +1,15 @@
+Test_Scenario_ID,TC_ID,Index,Name,EventType,MAC,VlanValid,VlanID,FrameRef,Interface,Address,Value,expectedPort,expectedAbsent,Timeout,���
+1,3,0,FDB Initialize,FdbInitialize,-,-,-,-,,-,-,-,-,-,Forwarding ����_Dynamic
+1,3,1,MAC_Learning_Enable,RegWrite,-,-,-,-,,0x44A00A0C,0x00000013,-,-,-,
+1,3,2,Set Aging_Threshold,RegWrite,-,-,-,-,,0x44A00A14,0x00003A98,-,-,-,
+1,3,3,Packet _Send,Packet,-,-,-,Packet_1,Port 0,-,-,-,-,-,
+1,3,4,FDB_Learn_wait,Delay,-,-,-,-,,-,-,-,-,1000ms,
+1,3,5,MAC_Learning_Disable,RegWrite,-,-,-,-,,0x44A00A0C,0x00000011,-,-,-,
+1,3,6,FDB_Entry Read,FdbVerify,a0:36:9f:a8:da:60,FALSE,-,-,,-,-,0b000001,FALSE,-,
+1,3,7,Wait_AgingTime,Delay,-,-,-,-,,-,-,-,-,16000ms,
+1,3,8,FDB_Entry Read,FdbVerify,a0:36:9f:a8:da:60,FALSE,-,-,,-,-,-,TRUE,-,
+1,3,9,MAC_Learning_Enable,RegWrite,-,-,-,-,,0x44A00A0C,0x00000013,-,-,-,
+1,3,10,Packet _Send,Packet,-,-,-,Packet_1,Port 0,-,-,-,-,-,
+1,3,11,FDB_Learn_wait,Delay,-,-,-,-,,-,-,-,-,1000ms,
+1,3,12,MAC_Learning_Disable,RegWrite,-,-,-,-,,0x44A00A0C,0x00000011,-,-,-,
+1,3,13,FDB_Entry Read,FdbVerify,a0:36:9f:a8:da:60,FALSE,-,-,,-,-,0b000001,FALSE,-,

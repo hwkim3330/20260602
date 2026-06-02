@@ -1,0 +1,5 @@
+Test_Scenario_ID,TC_ID,Index,Name,EventType,MAC,Port,VlanValid,VlanID,FrameRef,Interface,Expected,Timeout,���
+2,2,0,FDB_Initialize,FdbInitialize,-,-,-,-,-,-,-,-,Forwarding ����_Static
+2,2,1,FDB_Write,FdbWrite,6c:b3:11:1c:18:18,0b100000,-,-,-,-,-,-,
+2,2,2,Packet0 _Send,Packet,-,-,FALSE,-,Packet_34,Port4,-,-,
+2,2,3,RX_Result,RxVerify,-,-,-,-,-,-,0b000000,1000ms,

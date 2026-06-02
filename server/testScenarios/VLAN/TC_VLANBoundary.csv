@@ -1,0 +1,12 @@
+Test_Scenario_ID,TC_ID,Index,Name,EventType,Address,Value,Mask,VlanValid,VlanID,FrameRef,Interface,Expected,Timeout
+3,0,0,FDB_Initialize,FdbInitialize,-,-,-,-,-,-,-,-,-
+3,0,1,Set_VLAN as 10,RegWrite,0x44A00A20,0x0000100A,-,-,-,-,-,-,-
+3,0,2,Set_Member_Port,RegWrite,0x44A00A24,0x00000007,-,-,-,-,-,-,-
+3,0,3,Write_CMD,RegWrite,0x44A00A2C,0x00000024,-,-,-,-,-,-,-
+3,0,4,Check_Done,RegVerify,0x44A00A44,-,0x00000004,-,-,-,-,0x00000004,500ms
+3,0,5,Set_VLAN as 20,RegWrite,0x44A00A20,0x00001014,-,-,-,-,-,-,-
+3,0,6,Set_Member_Port,RegWrite,0x44A00A24,0x00000038,-,-,-,-,-,-,-
+3,0,7,Write_CMD,RegWrite,0x44A00A2C,0x00000024,-,-,-,-,-,-,-
+3,0,8,Check_Done,RegVerify,0x44A00A44,-,0x00000004,-,-,-,-,0x00000004,500ms
+3,0,9,Send_Packet,Packet,-,-,-,TRUE,20,Packet_35,Port 5,-,-
+3,0,10,Rx_Result,RxVerify,-,-,-,,,-,-,0b000111,1000ms

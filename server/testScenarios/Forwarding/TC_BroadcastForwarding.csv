@@ -1,0 +1,4 @@
+Test_Scenario_ID,TC_ID,Index,Name,EventType,MAC,VlanValid,VlanID,FrameRef,Interface,Expected,Timeout,비고
+2,3,0,FDB_Initialize,FdbInitialize,-,-,-,-,,-,-,Forwarding 검증_Static
+2,3,1,Packet0 _Send,Packet,-,FALSE,-,Packet_32,Port0,-,-,
+2,3,2,RX_Result,RxVerify,-,-,-,-,,0b111110,1000ms,

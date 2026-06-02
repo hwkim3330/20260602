@@ -1,0 +1,28 @@
+[
+  {
+    "port": 0,
+    "iface": "enp12s0f0"
+  },
+  {
+    "port": 1,
+    "iface": "enp12s0f1"
+  },
+  {
+    "port": 2,
+    "iface": "enp12s0f2"
+  },
+  {
+    "port": 3,
+    "iface": "enp12s0f3"
+  },
+  {
+    "port": 4,
+    "iface": "enp3s0f1",
+    "nodeUrl": "http://169.254.1.168:8080"
+  },
+  {
+    "port": 5,
+    "iface": "enp3s0f0",
+    "nodeUrl": "http://169.254.1.168:8080"
+  }
+]

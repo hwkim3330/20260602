@@ -1,0 +1,7 @@
+Test_Scenario_ID,TC_Id,Index,Name,EventType,MAC,VlanValid,VlanID,FrameRef,Interface,Address,Value,expectedPort,expectedAbsent,Timeout,���
+1,0,0,FDB Initialize,FdbInitialize,-,-,-,-,,-,-,-,-,-,Single_MAC_Learning
+1,0,1,MAC_Learning_Enable,RegWrite,-,-,-,-,,0x44A00A0C,0x00000003,-,-,-,
+1,0,2,Packet _Send,Packet,-,-,-,Packet_1,Port 0,-,-,-,-,-,
+1,0,3,FDB_Learn_wait,Delay,-,-,-,-,,-,-,-,-,1000ms,
+1,0,4,MAC_Learning_Disable,RegWrite,-,-,-,-,,0x44A00A0C,0x00000001,-,-,-,
+1,0,5,Check_FDB_Entry,FdbVerify,A0:36:9F:A8:DA:60,FALSE,-,-,,,,0b000001,FALSE,-,

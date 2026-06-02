@@ -1,0 +1,11 @@
+# Logs (runtime debug logs)
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env (secrets)
+.env
+.env.local
+*.env

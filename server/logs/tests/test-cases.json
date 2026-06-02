@@ -1,0 +1,176 @@
+[
+  {
+    "id": "default",
+    "name": "Default Group",
+    "groups": [],
+    "cases": []
+  },
+  {
+    "id": "1e8c0e24-d44e-40cf-9da8-ee6fffe13085",
+    "name": "CSV Import",
+    "cases": [
+      {
+        "id": "a9b4dddd-5dd0-4999-90a7-d9efcea918c2",
+        "name": "TC",
+        "steps": [
+          {
+            "eventType": "registerWrite",
+            "offset": "0x44A00080",
+            "value": "0x00610000",
+            "name": "Port0_MDIO_Enable"
+          },
+          {
+            "eventType": "registerWrite",
+            "offset": "0x44A00090",
+            "value": "0x80010000",
+            "name": "Port0_BMSR_Read_Trigger"
+          },
+          {
+            "eventType": "registerExpect",
+            "offset": "0x44A00090",
+            "mask": "0x80000004",
+            "expected": "0x00000004",
+            "timeoutMs": 100,
+            "name": "Port0_LinkUp_Wait"
+          },
+          {
+            "eventType": "registerWrite",
+            "offset": "0x44A000C0",
+            "value": "0x00610000",
+            "name": "Port1_MDIO_Enable"
+          },
+          {
+            "eventType": "registerWrite",
+            "offset": "0x44A000D0",
+            "value": "0x80810000",
+            "name": "Port1_BMSR_Read_Trigger"
+          },
+          {
+            "eventType": "registerExpect",
+            "offset": "0x44A000D0",
+            "mask": "0x80000004",
+            "expected": "0x00000004",
+            "timeoutMs": 100,
+            "name": "Port1_LinkUp_Wait"
+          },
+          {
+            "eventType": "registerWrite",
+            "offset": "0x44A00100",
+            "value": "0x00610000",
+            "name": "Port2_MDIO_Enable"
+          },
+          {
+            "eventType": "registerWrite",
+            "offset": "0x44A00110",
+            "value": "0x80A10000",
+            "name": "Port2_BMSR_Read_Trigger"
+          },
+          {
+            "eventType": "registerExpect",
+            "offset": "0x44A00110",
+            "mask": "0x80000004",
+            "expected": "0x00000004",
+            "timeoutMs": 100,
+            "name": "Port2_LinkUp_Wait"
+          },
+          {
+            "eventType": "registerWrite",
+            "offset": "0x44A00140",
+            "value": "0x00610000",
+            "name": "Port3_MDIO_Enable"
+          },
+          {
+            "eventType": "registerWrite",
+            "offset": "0x44A00150",
+            "value": "0x81010000",
+            "name": "Port3_BMSR_Read_Trigger"
+          },
+          {
+            "eventType": "registerExpect",
+            "offset": "0x44A00150",
+            "mask": "0x80000004",
+            "expected": "0x00000004",
+            "timeoutMs": 100,
+            "name": "Port3_LinkUp_Wait"
+          },
+          {
+            "eventType": "registerWrite",
+            "offset": "0x44A00180",
+            "value": "0x00610000",
+            "name": "Port4_MDIO_Enable"
+          },
+          {
+            "eventType": "registerWrite",
+            "offset": "0x44A00190",
+            "value": "0x81410000",
+            "name": "Port4_BMSR_Read_Trigger"
+          },
+          {
+            "eventType": "registerExpect",
+            "offset": "0x44A00190",
+            "mask": "0x80000004",
+            "expected": "0x00000004",
+            "timeoutMs": 100,
+            "name": "Port4_LinkUp_Wait"
+          },
+          {
+            "eventType": "registerWrite",
+            "offset": "0x44A001c0",
+            "value": "0x00610000",
+            "name": "Port5_MDIO_Enable"
+          },
+          {
+            "eventType": "registerWrite",
+            "offset": "0x44A001D0",
+            "value": "0x81810000",
+            "name": "Port5_BMSR_Read_Trigger"
+          },
+          {
+            "eventType": "registerExpect",
+            "offset": "0x44A001D0",
+            "mask": "0x80000004",
+            "expected": "0x00000004",
+            "timeoutMs": 100,
+            "name": "Port5_LinkUp_Wait"
+          }
+        ],
+        "importedFrom": "TC.csv",
+        "importedAt": "2026-05-20T07:09:43.443Z"
+      },
+      {
+        "id": "83a99ac7-283f-4b79-b82e-fe0b8a9fee53",
+        "name": "TC1",
+        "steps": [
+          {
+            "eventType": "fdbFlush",
+            "name": "FDBFlush"
+          },
+          {
+            "eventType": "packet",
+            "name": "Packet _Send"
+          },
+          {
+            "eventType": "delay",
+            "delayMs": 100,
+            "name": "FDB_Learn_wait"
+          },
+          {
+            "eventType": "fdbRead",
+            "mac": "C8:4D:44:25:2D:37",
+            "vlanId": 0,
+            "name": "FDB_Entry Read"
+          }
+        ],
+        "importedFrom": "TC1.csv",
+        "importedAt": "2026-05-20T07:09:43.443Z"
+      },
+      {
+        "id": "fd9ce1a1-b66c-424e-8fcb-2f979d7803a0",
+        "name": "TC_Packets",
+        "steps": [],
+        "importedFrom": "TC_Packets.csv",
+        "importedAt": "2026-05-20T07:09:43.443Z"
+      }
+    ]
+  }
+]

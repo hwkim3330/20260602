@@ -1,0 +1,16 @@
+Test_Scenario_ID,TC_Id,Index,Name,EventType,MAC,Port,VlanValid,VlanID,Bucket,Slot,Expected,timeout,���
+0,1,0,FDB Initialize,FdbInitialize,-,-,-,-,-,-,-,,FDB Capacity ����
+0,1,1,Fill_same_Bucket,FdbWrite,A0:36:9F:A8:DA:60 ,0b000001,FALSE,-,-,-,-,,
+0,1,2,Delay,Delay,-,-,-,-,-,-,-,3000ms,
+0,1,3,Fill_same_Bucket,FdbWrite,92:FB:66:3E:45:25,0b000010,FALSE,-,-,-,-,,
+0,1,4,Fill_same_Bucket,FdbWrite,9F:4A:4B:F0:9E:AF,0b000100,FALSE,-,-,-,-,,
+0,1,5,Fill_same_Bucket,FdbWrite,4F:1E:10:58:52:05,0b001000,FALSE,-,-,-,-,,
+0,1,6,Check slot #1,FdbReadBucket,-,-,-,-,761,0x1,A0:36:9F:A8:DA:60 ,,
+0,1,7,Check slot #2,FdbReadBucket,-,-,-,-,761,0x2,92:FB:66:3E:45:25,,
+0,1,8,Check slot #3,FdbReadBucket,-,-,-,-,761,0x4,9F:4A:4B:F0:9E:AF,,
+0,1,9,Check slot #4,FdbReadBucket,-,-,-,-,761,0x8,4F:1E:10:58:52:05,,
+0,1,10,Rewrite_same_bucket,FdbWrite,00:00:00:00:04:61,0b010000,FALSE,-,-,-,-,,
+0,1,11,Check slot #1,FdbReadBucket,-,-,-,-,761,0x1,00:00:00:00:04:61,,
+0,1,12,Check slot #2,FdbReadBucket,-,-,-,-,761,0x2,92:FB:66:3E:45:25,,
+0,1,13,Check slot #3,FdbReadBucket,-,-,-,-,761,0x4,9F:4A:4B:F0:9E:AF,,
+0,1,14,Check slot #4,FdbReadBucket,-,-,-,-,761,0x8,4F:1E:10:58:52:05,,

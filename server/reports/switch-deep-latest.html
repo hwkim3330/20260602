@@ -1,0 +1,111 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Switch Deep Test Report</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    body{margin:24px;font:14px/1.45 ui-sans-serif,system-ui;color:#17202a;background:linear-gradient(180deg,#eef5f6,#f8fafc 280px)}
+    .wrap{max-width:1220px;margin:auto}
+    .hero{background:radial-gradient(circle at 85% 15%,rgba(34,197,94,.24),transparent 170px),linear-gradient(135deg,#10262c,#0f6f78);color:white;border-radius:24px;padding:24px 26px;box-shadow:0 18px 45px #0f172a26}
+    .hero h1{margin:0 0 6px;font-size:30px;letter-spacing:-.03em}.hero p{max-width:900px;color:#d9fbff}
+    .cards{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:16px 0}
+    .card,.chart,table,.note,.topology,.heatmap{background:white;border:1px solid #d9e2ea;border-radius:18px;box-shadow:0 4px 16px #0f172a10}
+    .card{padding:14px}.card span{font-size:11px;color:#64748b;text-transform:uppercase;font-weight:800}.card strong{display:block;font-size:26px}
+    .charts{display:grid;grid-template-columns:1fr 1fr;gap:16px}.chart{padding:16px}.chart h3,.topology h3,.heatmap h3{margin:0 0 10px}
+    .note{padding:14px 16px;margin:16px 0;color:#334155}.note strong{color:#0f6f78}
+    .topology{padding:16px;margin:16px 0}.topoGrid{display:grid;gap:12px}
+    .topoLinkCard{display:grid;grid-template-columns:minmax(180px,1fr) minmax(280px,1.15fr) minmax(180px,1fr);gap:12px;align-items:center;border:1px solid #dbe7ef;border-radius:16px;padding:12px;background:linear-gradient(90deg,#f8fbfc,#fff)}
+    .topoLinkCard.ok{border-color:#b7e4c7}.topoLinkCard.warn{border-color:#f5c28b}
+    .topoNode{border-radius:14px;background:#f2f8f9;border:1px solid #d7e8ec;padding:12px}.topoNode.peer{background:#fff7ed;border-color:#fed7aa}
+    .topoNode span{display:block;font-size:10px;font-weight:900;color:#64748b;letter-spacing:.08em}.topoNode strong{display:block;font-size:18px}.topoNode code,.topoNode small{display:block;color:#475569;margin-top:2px}
+    .switchPath{position:relative;display:grid;grid-template-columns:1fr 110px 1fr;align-items:center;gap:8px;min-height:94px}
+    .wire{grid-column:1/4;height:8px;border-radius:999px;background:linear-gradient(90deg,#0f6f78,#22c55e,#f59e0b);box-shadow:0 0 0 4px #eef8f1}
+    .dutBox{grid-column:2;grid-row:1;border-radius:14px;background:#10262c;color:white;text-align:center;padding:16px 10px;font-weight:900;box-shadow:0 12px 24px #0f172a22}
+    .dutPort{position:absolute;top:0;left:50%;transform:translateX(-50%);background:#e6f5ed;color:#14532d;border-radius:999px;padding:4px 10px;font-size:11px;font-weight:900}
+    .linkStats{position:absolute;bottom:0;left:50%;transform:translateX(-50%);display:flex;gap:8px}.linkStats span{background:white;border:1px solid #dbe7ef;border-radius:999px;padding:4px 8px;font-family:ui-monospace,SFMono-Regular,monospace;font-size:12px}
+    .heatmap{padding:16px;margin:16px 0}.heatRow{display:grid;grid-template-columns:minmax(260px,.95fr) 1.5fr;gap:10px;align-items:center;padding:7px 0;border-top:1px solid #edf2f7}.heatRow:first-of-type{border-top:0}
+    .heatRow strong{font-size:12px}.heatCell{display:inline-block;margin:3px;border-radius:8px;padding:5px 8px;font-family:ui-monospace,SFMono-Regular,monospace;font-size:12px;font-weight:800}
+    .heatCell.ok{background:#dcfce7;color:#14532d}.heatCell.partial{background:#fef3c7;color:#92400e}.heatCell.fail{background:#fee2e2;color:#991b1b}
+    table{width:100%;border-collapse:separate;border-spacing:0;margin-top:16px;overflow:hidden}th,td{padding:10px 12px;border-bottom:1px solid #e5edf3;text-align:left;vertical-align:top}th{background:#edf6f7;font-size:12px;text-transform:uppercase;color:#456}td:nth-child(n+3){font-family:ui-monospace,SFMono-Regular,monospace}
+    .pill{display:inline-block;color:white;border-radius:999px;padding:4px 9px;font-size:11px;font-weight:900;white-space:nowrap}.muted{color:#64748b}
+    @media(max-width:900px){.cards,.charts,.topoLinkCard,.heatRow{grid-template-columns:1fr}.switchPath{min-height:120px}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <h1>Switch Deep Test Report</h1>
+      <div>2026-05-20T04:44:21.068Z</div>
+      <p>Known-unicast validation. Local http://localhost:8080 · Peer http://172.31.51.213:8080 · 3 trials · 5 frames/trial · up to 3 measurement attempts/trial. Destination MAC and capture BPF are pinned per port pair.</p>
+    </div>
+    <div class="cards">
+      <div class="card"><span>Total Frames</span><strong>60</strong></div>
+      <div class="card"><span>Matched</span><strong>60</strong></div>
+      <div class="card"><span>Clean Directions</span><strong>4/4</strong></div>
+      <div class="card"><span>Avg Trial Runtime</span><strong>3140 ms</strong></div>
+      <div class="card"><span>Setup Retries</span><strong>0</strong></div>
+    </div>
+    <div class="topology">
+      <h3>Physical 4-Port Switch Topology</h3>
+      <div class="topoGrid"><div class="topoLinkCard ok">
+      <div class="topoNode">
+        <span>THIS PC</span><strong>enp1s0f1</strong><code>169.254.141.14</code><small>a0:36:9f:a8:e4:a9</small>
+      </div>
+      <div class="switchPath">
+        <div class="wire"></div>
+        <div class="dutPort">P0-P1</div>
+        <div class="dutBox">DUT SWITCH</div>
+        <div class="linkStats">
+          <span>→ 15/15</span>
+          <span>← 15/15</span>
+        </div>
+      </div>
+      <div class="topoNode peer">
+        <span>PEER PC</span><strong>이더넷 2</strong><code>169.254.23.158</code><small>c8:4d:44:20:40:5b</small>
+      </div>
+    </div><div class="topoLinkCard ok">
+      <div class="topoNode">
+        <span>THIS PC</span><strong>enp1s0f3</strong><code>169.254.12.243</code><small>a0:36:9f:a8:e4:ab</small>
+      </div>
+      <div class="switchPath">
+        <div class="wire"></div>
+        <div class="dutPort">P2-P3</div>
+        <div class="dutBox">DUT SWITCH</div>
+        <div class="linkStats">
+          <span>→ 15/15</span>
+          <span>← 15/15</span>
+        </div>
+      </div>
+      <div class="topoNode peer">
+        <span>PEER PC</span><strong>이더넷</strong><code>169.254.204.140</code><small>c8:4d:44:26:3b:a6</small>
+      </div>
+    </div></div>
+    </div>
+    <div class="note"><strong>Method:</strong> Each direction sends known-unicast UDP frames to the exact destination MAC, then captures only frames matching source and destination MAC on the expected receiving NIC. A retry is used only for measurement setup errors, not to inflate packet counts.</div>
+    <div class="charts">
+      <div class="chart"><h3>Frame Accounting by Direction</h3><canvas id="accounting"></canvas></div>
+      <div class="chart"><h3>Marker Receive Rate by Direction</h3><canvas id="rx"></canvas></div>
+      <div class="chart"><h3>Trial Runtime Trend</h3><canvas id="elapsed"></canvas></div>
+      <div class="chart"><h3>Setup / API Health</h3><canvas id="api"></canvas></div>
+    </div>
+    <div class="heatmap"><h3>Trial Stability Heatmap</h3><div class="heatRow"><strong>Local enp1s0f1 -&gt; Peer 이더넷 2</strong><div><span class="heatCell ok" title="trial 1: 5/5">5/5</span><span class="heatCell ok" title="trial 2: 5/5">5/5</span><span class="heatCell ok" title="trial 3: 5/5">5/5</span></div></div><div class="heatRow"><strong>Local enp1s0f3 -&gt; Peer 이더넷</strong><div><span class="heatCell ok" title="trial 1: 5/5">5/5</span><span class="heatCell ok" title="trial 2: 5/5">5/5</span><span class="heatCell ok" title="trial 3: 5/5">5/5</span></div></div><div class="heatRow"><strong>Peer 이더넷 2 -&gt; Local enp1s0f1</strong><div><span class="heatCell ok" title="trial 1: 5/5">5/5</span><span class="heatCell ok" title="trial 2: 5/5">5/5</span><span class="heatCell ok" title="trial 3: 5/5">5/5</span></div></div><div class="heatRow"><strong>Peer 이더넷 -&gt; Local enp1s0f3</strong><div><span class="heatCell ok" title="trial 1: 5/5">5/5</span><span class="heatCell ok" title="trial 2: 5/5">5/5</span><span class="heatCell ok" title="trial 3: 5/5">5/5</span></div></div></div>
+    <table><thead><tr><th>Direction</th><th>Verdict</th><th>Matched</th><th>RX</th><th>API Errors</th><th>Trials</th></tr></thead><tbody><tr><td>Local enp1s0f1 -&gt; Peer 이더넷 2</td><td><span class="pill" style="background:#12803a">PASS</span></td><td>15/15</td><td>100%</td><td>0</td><td>5/5 · 5/5 · 5/5</td></tr><tr><td>Local enp1s0f3 -&gt; Peer 이더넷</td><td><span class="pill" style="background:#12803a">PASS</span></td><td>15/15</td><td>100%</td><td>0</td><td>5/5 · 5/5 · 5/5</td></tr><tr><td>Peer 이더넷 2 -&gt; Local enp1s0f1</td><td><span class="pill" style="background:#12803a">PASS</span></td><td>15/15</td><td>100%</td><td>0</td><td>5/5 · 5/5 · 5/5</td></tr><tr><td>Peer 이더넷 -&gt; Local enp1s0f3</td><td><span class="pill" style="background:#12803a">PASS</span></td><td>15/15</td><td>100%</td><td>0</td><td>5/5 · 5/5 · 5/5</td></tr></tbody></table>
+    <p class="muted">Generated artifact: <code>/reports/switch-deep-latest.html</code> and <code>/reports/switch-deep-latest.json</code>.</p>
+  </div>
+  <script>
+    const labels=["Local enp1s0f1 -> Peer 이더넷 2","Local enp1s0f3 -> Peer 이더넷","Peer 이더넷 2 -> Local enp1s0f1","Peer 이더넷 -> Local enp1s0f3"];
+    new Chart(document.getElementById('accounting'),{type:'bar',data:{labels,datasets:[
+      {label:'Sent frames',data:[15,15,15,15],backgroundColor:'#94a3b8'},
+      {label:'Marker matched',data:[15,15,15,15],backgroundColor:'#16a34a'},
+      {label:'Captured rows',data:[15,15,18,15],backgroundColor:'#0f6f78'}
+    ]},options:{responsive:true,plugins:{legend:{position:'bottom'}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});
+    new Chart(document.getElementById('rx'),{type:'bar',data:{labels,datasets:[{label:'RX %',data:[100,100,100,100],backgroundColor:'#0f6f78'}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{min:0,max:100}}}});
+    new Chart(document.getElementById('elapsed'),{type:'line',data:{labels:["Trial 1","Trial 2","Trial 3"],datasets:[{"label":"Local enp1s0f1 -> Peer 이더넷 2","data":[3246,3468,3234],"borderColor":"#0f6f78","backgroundColor":"#0f6f78","tension":0.25},{"label":"Local enp1s0f3 -> Peer 이더넷","data":[3185,3443,3284],"borderColor":"#f59e0b","backgroundColor":"#f59e0b","tension":0.25},{"label":"Peer 이더넷 2 -> Local enp1s0f1","data":[3135,2843,3107],"borderColor":"#2563eb","backgroundColor":"#2563eb","tension":0.25},{"label":"Peer 이더넷 -> Local enp1s0f3","data":[2903,2760,3076],"borderColor":"#16a34a","backgroundColor":"#16a34a","tension":0.25}]},options:{responsive:true,plugins:{legend:{position:'bottom'}},scales:{y:{beginAtZero:false,title:{display:true,text:'ms'}}}}});
+    new Chart(document.getElementById('api'),{type:'bar',data:{labels,datasets:[
+      {label:'API errors',data:[0,0,0,0],backgroundColor:'#dc2626'},
+      {label:'Avg runtime ms',data:[3316,3304,3028,2913],backgroundColor:'#f59e0b',yAxisID:'y1'}
+    ]},options:{responsive:true,plugins:{legend:{position:'bottom'}},scales:{y:{beginAtZero:true,ticks:{precision:0}},y1:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false},title:{display:true,text:'ms'}}}}});
+  </script>
+</body>
+</html>
