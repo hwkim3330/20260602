@@ -98,9 +98,28 @@ npm run setup:windows-cap
 
 성공 시 `[PacketLabManager] Packets : cap npm ready (send+capture)` 가 출력됩니다.
 
-> 참고: 커밋된 `cap.node`는 **Windows 빌드**입니다. **Linux/macOS에서는
-> `npm rebuild cap`** (또는 `npm install`의 postinstall) 으로 해당 OS용 libpcap에 맞게
-> 재빌드됩니다(Linux 빌드는 `deps/winpcap` 대신 시스템 `-lpcap`을 사용하므로 무관).
+### cap 멀티플랫폼 prebuilt (node_modules 커밋 유지)
+
+`node_modules`를 저장소에 포함하므로, 네이티브 모듈 `cap`(OS·CPU·Node ABI별 바이너리)을
+**플랫폼별 prebuilt로 동봉**합니다.
+
+- `server/prebuilds/<platform>-<arch>/node-v<ABI>/cap.node` 에 OS별 바이너리를 보관합니다.
+- 서버 시작 시 `tools/cap-prebuilt.js`가 **현재 OS/ABI에 맞는 cap.node를**
+  `node_modules/cap/build/Release/cap.node`로 자동 배치합니다(없으면 그대로 둠).
+- 따라서 **Windows는 클론 후 바로 실행**됩니다(`win32-x64/node-v137` 동봉).
+
+**Linux용 prebuilt 추가**(리눅스에서 1회):
+
+```bash
+cd server
+npm rebuild cap          # 또는 (cap 미설치 시) npm install
+npm run cap:save         # 빌드된 cap.node를 prebuilds/<plat>-<arch>/node-v<ABI>/ 로 저장
+git add prebuilds && git commit -m "add linux cap prebuilt" && git push
+```
+
+> 같은 Node 메이저(ABI)에서만 prebuilt가 호환됩니다. ABI가 다르면 `npm install`의
+> postinstall 이 해당 플랫폼용으로 재빌드합니다. Linux 빌드는 `deps/winpcap`이 아니라
+> 시스템 `-lpcap`(`libpcap-dev`)을 사용합니다.
 
 ---
 

@@ -12,6 +12,11 @@ if (process.platform === 'win32') {
   if (!process.env.PATH.includes(npcapDir)) process.env.PATH = npcapDir + ';' + process.env.PATH;
 }
 
+// Place the cap.node prebuilt matching this OS/arch/Node-ABI into cap's load
+// path BEFORE anything requires `cap`. Lets the committed node_modules run on
+// both Windows and Linux from a fresh clone. No-op if there's no prebuilt.
+try { require('./tools/cap-prebuilt').ensureCapBinary(); } catch {}
+
 // Prevent unhandled errors from killing the process
 process.on('uncaughtException',   (err) => console.error('[FATAL uncaughtException]', err));
 process.on('unhandledRejection',  (reason) => console.error('[FATAL unhandledRejection]', reason));

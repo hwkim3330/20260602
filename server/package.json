@@ -8,6 +8,7 @@
     "switch:deep-report": "node tools/switchDeepReport.js",
     "install-native": "npm install serialport cap --save-optional",
     "setup:windows-cap": "node tools/setup-cap-windows.js",
+    "cap:save": "node tools/cap-prebuilt.js --save",
     "postinstall": "node tools/postinstall.js"
   },
   "dependencies": {
