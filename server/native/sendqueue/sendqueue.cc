@@ -15,9 +15,10 @@
   #include <errno.h>
   #include <unistd.h>
   #include <sys/socket.h>
-  #include <linux/if_packet.h>
-  #include <net/ethernet.h>
-  #include <net/if.h>
+  #include <arpa/inet.h>        // htons
+  #include <linux/if_ether.h>   // ETH_P_ALL, ETH_ALEN
+  #include <linux/if_packet.h>  // struct sockaddr_ll
+  #include <net/if.h>           // if_nametoindex
   #include <vector>
 #endif
 
