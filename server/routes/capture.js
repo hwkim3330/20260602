@@ -63,18 +63,29 @@ router.post('/capture/start', async (req, res) => {
 
     const stillRunning = pb.isCapturing();
     const lastErr      = pb.getLastCaptureError ? pb.getLastCaptureError() : captureErr;
+    const realErr      = lastErr && !/listening on /i.test(lastErr) ? lastErr : '';
 
-    const realErr = lastErr && !/listening on /i.test(lastErr) ? lastErr : '';
-    if (!stillRunning && realErr) {
-      const hint = /permission/i.test(realErr)
-        ? ' → fix: sudo setcap cap_net_raw,cap_net_admin+eip $(which tcpdump)  or run: sudo node server.js'
-        : /no such device|siocgifhwaddr/i.test(realErr)
-          ? ' → interface not found; check /api/interfaces for available names'
-          : '';
-      return res.status(500).json({ ok: false, error: realErr + hint });
+    if (!stillRunning) {
+      // Capture did not come up — report a specific, actionable cause instead of
+      // a silent ok:true. Distinguish: no backend / permission / no device /
+      // BPF filter error / pcap device resolve failure.
+      if (!pb.isAvailable() && !pb.isTcpdumpAvailable()) {
+        return res.status(500).json({ ok: false, error:
+          'No capture backend available. Install one of:\n' +
+          '  • libpcap (send + capture): sudo apt install libpcap-dev build-essential && npm install cap\n' +
+          '  • tcpdump (capture only):   sudo apt install tcpdump' });
+      }
+      const msg = realErr || 'Capture failed to start';
+      let hint = '';
+      if (/permission|operation not permitted|don.?t have permission|not permitted/i.test(msg))
+        hint = ' → needs capture privileges: run "sudo node server.js" (or: sudo setcap cap_net_raw,cap_net_admin+eip $(which tcpdump))';
+      else if (/syntax error|parse error|bpf|filter|expression/i.test(msg))
+        hint = ` → BPF filter rejected: "${bpfFilter}"`;
+      else if (/no such device|siocgifhwaddr|resolve failed/i.test(msg) || !realErr)
+        hint = ' → no capture device matched the selected interface(s); check /api/interfaces (on Windows the pcap device name differs from the OS interface name)';
+      return res.status(500).json({ ok: false, error: msg + hint });
     }
-    res.json({ ok: true, bpfFilter, capturing: stillRunning, interfaces: pb.getCaptureDeviceNames().length,
-               warning: !stillRunning ? 'No matching capture device found' : undefined });
+    res.json({ ok: true, bpfFilter, capturing: true, interfaces: pb.getCaptureDeviceNames().length });
   } catch (err) { workerErr(res, err); }
 });
 
@@ -153,7 +164,17 @@ router.post('/capture-stream', async (req, res) => {
   packetBackend.addStreamCallback(onRecord);
   packetBackend.clearCapture();
   const ok = packetBackend.startCapture(interfaces, bpfFilter, () => {}, (e) => write({ error: e.message }));
-  if (!ok) { write({ error: 'No capture device available (install libpcap)' }); res.end(); return; }
+  if (!ok) {
+    const le = packetBackend.getLastCaptureError && packetBackend.getLastCaptureError();
+    const reason = (!packetBackend.isAvailable() && !packetBackend.isTcpdumpAvailable())
+      ? 'No capture backend available (install libpcap: npm install cap — or tcpdump)'
+      : (le && !/listening on /i.test(le))
+        ? le
+        : 'No capture device matched the selected interface(s)';
+    write({ error: reason });
+    res.end();
+    return;
+  }
 
   const stop = () => {
     if (stopped) return; stopped = true;

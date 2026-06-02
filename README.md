@@ -74,8 +74,8 @@ sudo apt install -y git nodejs npm tcpdump libpcap-dev build-essential
 
 ```bash
 # 1. 클론
-git clone https://github.com/hwkim3330/20260528.git
-cd 20260528/server
+git clone https://github.com/hwkim3330/20260602.git
+cd 20260602/server
 
 # 2. 패키지 설치
 npm install
@@ -157,7 +157,7 @@ Base URL: `http://localhost:8080/api`
 ## 프로젝트 구조
 
 ```
-20260528/
+20260602/
 ├── server/                         # Node.js 서버 (메인)
 │   ├── server.js                   # 진입점
 │   ├── package.json

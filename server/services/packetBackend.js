@@ -10,6 +10,7 @@
  */
 
 const os             = require('os');
+const fs             = require('fs');
 const { spawn }      = require('child_process');
 const { buildFrame } = require('./frameBuilder');
 
@@ -78,16 +79,20 @@ function _startIfaceMonitor() {
   _ifaceMonitorTimer = setInterval(() => {
     if (activeCaptures.size === 0 && _sendHandles.size === 0) return;
     const live = _liveIfaceNames();
-    for (const [dev] of [...activeCaptures]) {
-      if (!live.has(dev)) {
-        console.warn(`[packetBackend] interface ${dev} removed — closing capture handle`);
-        const entry = activeCaptures.get(dev);
-        try { entry?.cap.close(); } catch {}
+    // Liveness is checked against the OS interface name (os.networkInterfaces()
+    // keys), NOT the pcap device name. On Windows/Npcap the pcap device name
+    // (\Device\NPF_{GUID}) never appears in os.networkInterfaces(), so the old
+    // `live.has(dev)` test wrongly closed every handle within 500ms. When the OS
+    // name is unknown (auto-selected device) we skip the check rather than guess.
+    for (const [dev, entry] of [...activeCaptures]) {
+      if (entry.osName && !live.has(entry.osName)) {
+        console.warn(`[packetBackend] interface ${entry.osName} removed — closing capture handle`);
+        try { entry.cap.close(); } catch {}
         activeCaptures.delete(dev);
       }
     }
-    for (const [dev] of [..._sendHandles]) {
-      if (!live.has(dev)) _dropSendHandle(dev);
+    for (const [dev, h] of [..._sendHandles]) {
+      if (h.osName && !live.has(h.osName)) _dropSendHandle(dev);
     }
   }, 500);
 }
@@ -207,6 +212,7 @@ function hasTcpdump() {
 function startCapture(ifaceNames, filter, onPacket, onError) {
   // filter=''(promisc)이면 BPF 필터 미적용, null/undefined일 때만 MAC 기반 필터 자동 생성
   const effectiveFilter = filter ?? (ifaceNames.length ? buildIfaceBpfFilter(ifaceNames) : '');
+  lastCaptureError = ''; // clear stale errors from a previous attempt
 
   if (Cap) {
     // Primary: cap npm
@@ -215,8 +221,13 @@ function startCapture(ifaceNames, filter, onPacket, onError) {
 
     for (const name of ifaces) {
       const dev = resolveDevice(name);
-      if (!dev) continue;
+      if (!dev) { lastCaptureError = lastCaptureError || `pcap device resolve failed for "${name}"`; continue; }
       if (activeCaptures.has(dev)) continue;
+
+      // UI-facing label = requested OS interface name; falls back to pcap device
+      // name when no name was supplied. The pcap device name (e.g. \Device\NPF_…
+      // on Windows) is kept internally as the map key but never shown directly.
+      const label = name || dev;
 
       try {
         const c      = new Cap();
@@ -240,17 +251,20 @@ function startCapture(ifaceNames, filter, onPacket, onError) {
             const no      = ++captureSeq;
             const ts      = Date.now() / 1000;
             const decoded = decodeFrame(frame);
-            const record  = { no, timestamp: ts, interface: dev, length: nbytes, frameHex: hexStr, decoded };
+            const record  = { no, timestamp: ts, interface: label, length: nbytes, frameHex: hexStr, decoded };
             insertCaptureSorted(record);
-            onPacket(dev, frame, record);
+            onPacket(label, frame, record);
             for (const cb of captureStreamCbs) { try { cb(record); } catch {} }
           } catch {}
         });
-        c.on('error', (err) => { try { onError && onError(err); } catch {} });
+        c.on('error', (err) => { lastCaptureError = err.message; try { onError && onError(err); } catch {} });
 
-        activeCaptures.set(dev, { cap: c, buffer: buf });
+        activeCaptures.set(dev, { cap: c, buffer: buf, label, osName: name || null });
         started++;
-      } catch (e) { /* device not available */ }
+      } catch (e) {
+        // Surface why the device could not be opened (bad BPF filter, permission, etc.)
+        lastCaptureError = e.message || String(e);
+      }
     }
     if (started > 0) _startIfaceMonitor();
     return started > 0;
@@ -274,20 +288,30 @@ function getCaptureDeviceNames() {
   return [...Array.from(activeCaptures.keys()), ...Array.from(activeTcpdump.keys())];
 }
 
+// UI-facing interface names of all active captures (OS interface names, not the
+// internal pcap device names). cap captures expose their stored label; tcpdump
+// captures are already keyed by the OS interface name.
+function getActiveCaptureLabels() {
+  const labels = [];
+  for (const [, entry] of activeCaptures) if (entry.label) labels.push(entry.label);
+  for (const [iface] of activeTcpdump)    labels.push(iface);
+  return labels;
+}
+
 // ── Persistent send handles ────────────────────────────────────────────────────
 // Reuse one Cap handle per device across send calls.
 // Rapid new Cap() → open() → close() cycles cause use-after-free in libuv's
 // uv_poll_stop() path inside cap.node, leading to SIGSEGV.
 
-const _sendHandles  = new Map(); // dev → { cap, buf }
+const _sendHandles  = new Map(); // dev → { cap, buf, osName }
 const _sendInFlight = new Set(); // devs currently transmitting
 
-function _getSendHandle(dev) {
+function _getSendHandle(dev, osName) {
   if (_sendHandles.has(dev)) return _sendHandles.get(dev);
   const c   = new Cap();
   const buf = Buffer.alloc(65535);
   c.open(dev, '', 0, buf);
-  const h = { cap: c, buf };
+  const h = { cap: c, buf, osName: osName || null };
   _sendHandles.set(dev, h);
   _startIfaceMonitor(); // ensure monitor is running whenever we hold a live handle
   return h;
@@ -314,33 +338,31 @@ async function sendPackets(profile) {
   const count      = profile.count      ?? 1;
   const intervalMs = profile.intervalMs ?? 0;
 
-  // Auto-fill srcMac if missing
-  if (!profile.srcMac) {
-    const nics  = os.networkInterfaces();
-    const iface = (profile.interface || '').toLowerCase();
-    for (const [name, entries] of Object.entries(nics || {})) {
-      if (name.toLowerCase() === iface) {
-        const e4 = (entries || []).find(e => e.family === 'IPv4');
-        if (e4 && e4.mac && e4.mac !== '00:00:00:00:00:00') {
-          profile = { ...profile, srcMac: e4.mac };
-          break;
-        }
-      }
-    }
-  }
+  // Auto-fill srcMac with the real NIC MAC when left empty or all-zero.
+  // Covers both the flat profile and the visual block builder (blocks[].srcMac),
+  // and finds the MAC even on IP-less L2-only NICs (Linux sysfs fallback).
+  profile = _autofillSrcMac(profile);
+
+  // UI-facing interface label (OS name) — may differ from the pcap device name.
+  const label = profile.interface || dev;
 
   _sendInFlight.add(dev);
   try {
-    const handle = _getSendHandle(dev);
+    const handle = _getSendHandle(dev, profile.interface);
     let sent = 0, bytes = 0;
     for (let i = 0; i < count; i++) {
       const frame = buildFrame(profile, i);
       if (frame.length > 65535) throw new Error(`Frame too large: ${frame.length} bytes`);
+      // Register the TX-echo dedup key BEFORE injecting the frame. libpcap can
+      // surface our own injected frame on the capture handle before the post-send
+      // bookkeeping runs; registering first guarantees the echo is suppressed
+      // instead of being shown as a duplicate RX row.
+      _registerTxEcho(dev, frame);
       handle.cap.send(frame, frame.length);
       sent++;
       bytes += frame.length;
-      // Record TX frame into capture buffer — libpcap may not see its own injected frames
-      _recordTxFrame(dev, frame);
+      // Record the TX frame into the capture buffer (libpcap may not echo it back).
+      _recordTxFrame(dev, label, frame);
       if (intervalMs > 0 && i < count - 1)
         await new Promise(r => setTimeout(r, intervalMs));
     }
@@ -369,13 +391,16 @@ async function sendRaw(ifaceName, hex, count = 1) {
   if (frame.length === 0) throw new Error('Empty frame');
   if (frame.length > 65535) throw new Error(`Frame too large: ${frame.length} bytes`);
 
+  const label = ifaceName || dev;
+
   _sendInFlight.add(dev);
   try {
-    const handle = _getSendHandle(dev);
+    const handle = _getSendHandle(dev, ifaceName);
     let sent = 0;
     for (let i = 0; i < count; i++) {
+      _registerTxEcho(dev, frame);   // register dedup key before send (race-free)
       handle.cap.send(frame, frame.length);
-      _recordTxFrame(dev, frame);
+      _recordTxFrame(dev, label, frame);
       sent++;
     }
     return { framesSent: sent, bytesSent: sent * frame.length };
@@ -453,13 +478,65 @@ let captureStreamCbs = [];
 
 function getIfaceMac(ifaceName) {
   if (!ifaceName) return null;
+  const want = ifaceName.toLowerCase();
   for (const [name, entries] of Object.entries(os.networkInterfaces() || {})) {
-    if (name === ifaceName) {
-      const e = (entries || []).find(e => e.mac && e.mac !== '00:00:00:00:00:00');
+    if (name.toLowerCase() === want) {
+      const e = (entries || []).find(e => e.mac && !_isZeroMac(e.mac));
       return e?.mac?.toLowerCase() || null;
     }
   }
   return null;
+}
+
+/** True when a MAC is missing or all-zero (00:00:00:00:00:00). */
+function _isZeroMac(mac) {
+  if (!mac) return true;
+  const hex = String(mac).replace(/[^0-9a-fA-F]/g, '');
+  return hex.length === 0 || /^0+$/.test(hex);
+}
+
+/**
+ * Resolve the real hardware MAC of an OS interface.
+ *  1) os.networkInterfaces() (works when the NIC has any IPv4/IPv6 address)
+ *  2) Linux sysfs /sys/class/net/<iface>/address — covers IP-less L2-only NICs
+ *     that Node.js omits from os.networkInterfaces().
+ * Returns lowercase "aa:bb:cc:dd:ee:ff" or null.
+ */
+function _resolveNicMac(ifaceName) {
+  const fromNode = getIfaceMac(ifaceName);
+  if (fromNode) return fromNode;
+  if (!ifaceName || process.platform !== 'linux') return null;
+  // sysfs fallback (basename only — never traverse paths)
+  const safe = String(ifaceName).replace(/[^A-Za-z0-9._:@-]/g, '');
+  if (!safe) return null;
+  try {
+    const mac = fs.readFileSync(`/sys/class/net/${safe}/address`, 'utf8').trim().toLowerCase();
+    return (mac && !_isZeroMac(mac)) ? mac : null;
+  } catch { return null; }
+}
+
+/**
+ * Fill the source MAC with the real NIC MAC wherever the caller left it empty
+ * or all-zero. Handles both the flat profile (profile.srcMac / profile.arp)
+ * and the ordered visual-builder representation (profile.blocks[]). Returns a
+ * shallow clone so the caller's request object is not mutated.
+ */
+function _autofillSrcMac(profile) {
+  const nicMac = _resolveNicMac(profile.interface);
+  if (!nicMac) return profile;
+
+  const p = { ...profile };
+  if (_isZeroMac(p.srcMac)) p.srcMac = nicMac;
+  if (p.arp && _isZeroMac(p.arp.senderMac)) p.arp = { ...p.arp, senderMac: nicMac };
+
+  if (Array.isArray(p.blocks) && p.blocks.length) {
+    p.blocks = p.blocks.map(b => {
+      if (b && b.type === 'Ethernet' && _isZeroMac(b.srcMac)) return { ...b, srcMac: nicMac };
+      if (b && b.type === 'ARP'      && _isZeroMac(b.senderMac)) return { ...b, senderMac: nicMac };
+      return b;
+    });
+  }
+  return p;
 }
 
 /**
@@ -480,16 +557,21 @@ function clearCapture() { captureSeq = 0; captureRows = []; _recentTxHexes.clear
 // Dedup set: TX frames registered here are suppressed once if libpcap also captures them
 const _recentTxHexes = new Map(); // key: dev+hex → expiry timestamp
 
-function _recordTxFrame(dev, frame) {
-  const hexStr = frame.toString('hex');
-  const key    = dev + hexStr;
-  // Register for dedup (suppress one libpcap echo within 300ms)
-  _recentTxHexes.set(key, Date.now() + 300);
-  // Add to capture buffer as TX
+// Register a TX frame for echo-dedup (keyed by capture device + frame bytes).
+// Suppresses one libpcap/tcpdump echo of our own injected frame within 300ms.
+function _registerTxEcho(dev, frame) {
+  _recentTxHexes.set(dev + frame.toString('hex'), Date.now() + 300);
+}
+
+// Add a TX frame to the capture buffer. `dev` is the internal pcap device used
+// for the dedup key; `label` is the UI-facing interface name shown in the row.
+function _recordTxFrame(dev, label, frame) {
+  const hexStr  = frame.toString('hex');
+  _registerTxEcho(dev, frame); // keep dedup window fresh (idempotent)
   const no      = ++captureSeq;
   const ts      = Date.now() / 1000;
   const decoded = decodeFrame(frame);
-  const record  = { no, timestamp: ts, interface: dev, length: frame.length, frameHex: hexStr, decoded, direction: 'TX' };
+  const record  = { no, timestamp: ts, interface: label || dev, length: frame.length, frameHex: hexStr, decoded, direction: 'TX' };
   insertCaptureSorted(record);
   for (const cb of captureStreamCbs) { try { cb(record); } catch {} }
 }
@@ -519,9 +601,11 @@ function getCaptures(limit = 1000, offset = 0) {
 
 function getCaptureStatus(ifaceNames) {
   return {
-    capturing:          activeCaptures.size > 0,
+    // Reflect BOTH backends — tcpdump-fallback captures must report "capturing"
+    // too, otherwise the UI shows "idle" while packets are streaming in.
+    capturing:          activeCaptures.size > 0 || activeTcpdump.size > 0,
     captureCount:       captureRows.length,
-    captureInterfaces:  ifaceNames ?? getCaptureDeviceNames(),
+    captureInterfaces:  ifaceNames ?? getActiveCaptureLabels(),
   };
 }
 

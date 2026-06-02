@@ -1,7 +1,7 @@
 {
   "name": "packet-lab-manager-server",
   "version": "1.0.0",
-  "description": "Packet Lab Manager Server — Windows (C# worker) & Linux (native) dual-mode",
+  "description": "PacketLabManager Server — Ethernet packet generation, capture & scenario validation (Node.js; libpcap/cap with tcpdump fallback, Windows via Npcap)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
