@@ -823,6 +823,10 @@ function buildPacketPayload(pkt) {
   // selector is only visible when the Linux fast engine (txgen) is available.
   const engine = $('pgEngine')?.value;
   if (engine && engine !== 'cap') p.engine = engine;
+  // Optional final frame length (pad up to this many bytes). Field is present in
+  // index-light.html; absent in the main UI → harmless no-op there.
+  const fl = parseInt($('targetFrameLength')?.value, 10);
+  if (fl > 0) p.targetFrameLength = fl;
   p.blocks = blocks;
   return p;
 }

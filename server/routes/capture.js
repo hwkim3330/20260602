@@ -15,6 +15,26 @@ function buildBpfFilter({ srcMac, dstMac, etherType, bpfFilter } = {}) {
   return parts.join(' and ');
 }
 
+// Build a specific, actionable capture-failure message shared by /capture/start
+// and the one-shot /capture so both report the same way. `realErr` is the last
+// backend error (already stripped of the benign "listening on …" line).
+function captureFailureError(pb, realErr, bpfFilter) {
+  if (!pb.isAvailable() && !pb.isTcpdumpAvailable()) {
+    return 'No capture backend available. Install one of:\n' +
+           '  • libpcap (send + capture): sudo apt install libpcap-dev build-essential && npm install cap\n' +
+           '  • tcpdump (capture only):   sudo apt install tcpdump';
+  }
+  const msg = realErr || 'Capture failed to start';
+  let hint = '';
+  if (/permission|operation not permitted|don.?t have permission|not permitted/i.test(msg))
+    hint = ' → needs capture privileges: run "sudo node server.js" (or: sudo setcap cap_net_raw,cap_net_admin+eip $(which tcpdump))';
+  else if (/syntax error|parse error|bpf|filter|expression/i.test(msg))
+    hint = ` → BPF filter rejected: "${bpfFilter || ''}"`;
+  else if (/no such device|siocgifhwaddr|resolve failed/i.test(msg) || !realErr)
+    hint = ' → no capture device matched the selected interface(s); check /api/interfaces (on Windows the pcap device name differs from the OS interface name)';
+  return msg + hint;
+}
+
 // GET /api/capture/status
 router.get('/capture/status', async (req, res) => {
   try {
@@ -67,23 +87,8 @@ router.post('/capture/start', async (req, res) => {
 
     if (!stillRunning) {
       // Capture did not come up — report a specific, actionable cause instead of
-      // a silent ok:true. Distinguish: no backend / permission / no device /
-      // BPF filter error / pcap device resolve failure.
-      if (!pb.isAvailable() && !pb.isTcpdumpAvailable()) {
-        return res.status(500).json({ ok: false, error:
-          'No capture backend available. Install one of:\n' +
-          '  • libpcap (send + capture): sudo apt install libpcap-dev build-essential && npm install cap\n' +
-          '  • tcpdump (capture only):   sudo apt install tcpdump' });
-      }
-      const msg = realErr || 'Capture failed to start';
-      let hint = '';
-      if (/permission|operation not permitted|don.?t have permission|not permitted/i.test(msg))
-        hint = ' → needs capture privileges: run "sudo node server.js" (or: sudo setcap cap_net_raw,cap_net_admin+eip $(which tcpdump))';
-      else if (/syntax error|parse error|bpf|filter|expression/i.test(msg))
-        hint = ` → BPF filter rejected: "${bpfFilter}"`;
-      else if (/no such device|siocgifhwaddr|resolve failed/i.test(msg) || !realErr)
-        hint = ' → no capture device matched the selected interface(s); check /api/interfaces (on Windows the pcap device name differs from the OS interface name)';
-      return res.status(500).json({ ok: false, error: msg + hint });
+      // a silent ok:true (no backend / permission / no device / BPF / resolve).
+      return res.status(500).json({ ok: false, error: captureFailureError(pb, realErr, bpfFilter) });
     }
     res.json({ ok: true, bpfFilter, capturing: true, interfaces: pb.getCaptureDeviceNames().length });
   } catch (err) { workerErr(res, err); }
@@ -107,15 +112,33 @@ router.post('/capture/clear', async (req, res) => {
 
 // POST /api/capture  (one-shot)
 router.post('/capture', async (req, res) => {
-  const { interfaces = [], timeoutMs = 5000, limit = 500 } = req.body || {};
+  const { interfaces = [], timeoutMs = 5000, limit = 500,
+          bpfFilter: rawBpf = '', promisc = false } = req.body || {};
   try {
     const pb = req.app.locals.packetBackend;
+    let bpfFilter = (rawBpf || '').trim();
+    if (!bpfFilter && !promisc && interfaces.length) bpfFilter = pb.buildIfaceBpfFilter(interfaces);
+
     pb.clearCapture();
-    pb.startCapture(interfaces, '', () => {}, () => {});
-    await new Promise(r => setTimeout(r, Math.min(timeoutMs, 30000)));
+    let captureErr = '';
+    const started = pb.startCapture(interfaces, bpfFilter, () => {}, (e) => { captureErr = e.message; });
+
+    // Settle briefly so the backend can fail fast (permission / device / BPF),
+    // then verify it actually came up — don't return ok:true with empty rows
+    // when the capture never started.
+    await new Promise(r => setTimeout(r, 350));
+    if (!started || !pb.isCapturing()) {
+      const lastErr = pb.getLastCaptureError ? pb.getLastCaptureError() : captureErr;
+      const realErr = lastErr && !/listening on /i.test(lastErr) ? lastErr : '';
+      pb.stopCapture();
+      return res.status(500).json({ ok: false, error: captureFailureError(pb, realErr, bpfFilter) });
+    }
+
+    // Capture is running — collect for the remaining window.
+    await new Promise(r => setTimeout(r, Math.min(Math.max(0, timeoutMs - 350), 30000)));
     pb.stopCapture();
     const { rows, total } = pb.getCaptures(limit, 0);
-    res.json({ ok: true, rows, total });
+    res.json({ ok: true, rows, total, bpfFilter });
   } catch (err) { workerErr(res, err); }
 });
 

@@ -546,7 +546,9 @@ function _autofillSrcMac(profile) {
  */
 function buildIfaceBpfFilter(ifaceNames) {
   if (!ifaceNames || !ifaceNames.length) return '';
-  const macs = ifaceNames.map(getIfaceMac).filter(Boolean);
+  // Use _resolveNicMac (not getIfaceMac) so IP-less L2-only NICs — resolved via
+  // Linux sysfs — still get a dst-MAC filter instead of silently capturing all.
+  const macs = ifaceNames.map(_resolveNicMac).filter(Boolean);
   if (!macs.length) return '';
   const dstClauses = macs.map(m => `ether dst ${m}`);
   return `(${[...dstClauses, 'broadcast', 'multicast'].join(' or ')})`;
@@ -611,20 +613,50 @@ function getCaptureStatus(ifaceNames) {
 
 // ── Interface list ─────────────────────────────────────────────────────────────
 
+// Determine link/admin state. On Linux an L2-only NIC (no IP) is commonly UP, so
+// prefer sysfs operstate/flags over "has an IPv4 address"; fall back to IP heuristic.
+function _ifaceState(name, hasIpv4) {
+  if (process.platform === 'linux') {
+    const safe = String(name).replace(/[^A-Za-z0-9._:@-]/g, '');
+    try {
+      const op = fs.readFileSync(`/sys/class/net/${safe}/operstate`, 'utf8').trim();
+      if (op === 'up')   return 'up';
+      if (op === 'down') return 'down';
+      // 'unknown' (typical for many L2 setups) → consult IFF_UP in flags
+      const flags = parseInt(fs.readFileSync(`/sys/class/net/${safe}/flags`, 'utf8').trim(), 16);
+      if (!Number.isNaN(flags)) return (flags & 0x1) ? 'up' : 'down'; // IFF_UP
+    } catch { /* not on linux or sysfs unavailable */ }
+  }
+  return hasIpv4 ? 'up' : 'down';
+}
+
 function listInterfaces() {
   const nics   = os.networkInterfaces();
-  const devs   = getDeviceList();
   const result = [];
+  const seen   = new Set();
 
   for (const [name, entries] of Object.entries(nics || {})) {
     const ipv4 = (entries || [])
       .filter(e => e.family === 'IPv4')
       .map(e => ({ local: e.address, prefixlen: prefixFromMask(e.netmask) }));
 
-    const mac = (entries || []).find(e => e.mac && e.mac !== '00:00:00:00:00:00')?.mac ?? '';
-    const state = ipv4.length > 0 ? 'up' : 'down';
+    // Use the real hardware MAC even when there's no IPv4 (L2-only NIC).
+    const mac = (entries || []).find(e => e.mac && !_isZeroMac(e.mac))?.mac
+                ?? _resolveNicMac(name) ?? '';
+    result.push({ name, key: name, mac, state: _ifaceState(name, ipv4.length > 0), mtu: 1500, ipv4, description: name });
+    seen.add(name);
+  }
 
-    result.push({ name, key: name, mac, state, mtu: 1500, ipv4, description: name });
+  // Linux: include L2-only NICs that exist in sysfs but have no address, so
+  // os.networkInterfaces() omits them (common for switch-test NICs used IP-less).
+  if (process.platform === 'linux') {
+    try {
+      for (const name of fs.readdirSync('/sys/class/net')) {
+        if (seen.has(name) || name === 'lo') continue;
+        result.push({ name, key: name, mac: _resolveNicMac(name) ?? '', state: _ifaceState(name, false), mtu: 1500, ipv4: [], description: name });
+        seen.add(name);
+      }
+    } catch { /* sysfs unavailable */ }
   }
   return result;
 }
