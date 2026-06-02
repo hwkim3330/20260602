@@ -55,13 +55,35 @@ amortized) and is no longer in the per-packet hot path.
   struggle at 64 B/10G without DPDK.
 - This box's NIC is 2.5GbE (1 Gbps link), so 10G needs 10G hardware regardless.
 
+## Windows Npcap send-queue — MEASURED (engine:"sendqueue")
+
+We added a small Npcap send-queue addon (`server/native/sendqueue`, exposed as
+`engine:"sendqueue"`) that queues many frames and transmits them with one driver
+call per chunk (`pcap_sendqueue_transmit`) instead of one `pcap_sendpacket` per
+packet. Measured on the same USB 2.5GbE NIC, 1514 B frames:
+
+| Path | pps | Throughput |
+|------|----:|-----------:|
+| `cap` per-packet | ~10,000 | ~124 Mbps |
+| **`sendqueue` (Npcap batch)** | **~35,000–54,000** | **~0.43–0.66 Gbps** |
+
+That's ~4–5× faster. Chunk size (2k–32k) made no difference, so the remaining
+limit is the **USB 2.5GbE adapter / USB path**, not the software — a PCIe NIC
+would likely reach 1 Gbps line rate. JS is not the bottleneck: it only builds
+the frame once; the addon does the batched transmit.
+
 ## Bottom line
 
 | Path | 1 Gbps | 10 Gbps |
 |------|:------:|:-------:|
 | Windows, current `cap` (per-packet) | ❌ (~124 Mbps) | ❌ |
-| Windows + Npcap send-queue addon | ☑ feasible (untested) | ❌ (small frames) |
+| Windows + Npcap send-queue (`engine:"sendqueue"`) | ☑ ~0.66 Gbps here (USB-NIC limited; ✅ likely on PCIe) | ❌ (small frames) |
 | Linux `txgen`/`rxcap` (sendmmsg/recvmmsg) | ✅ (963 Mbps measured) | ☑ large frames; 64 B needs DPDK |
+
+> `engine:"sendqueue"` is synchronous (blocks for the burst duration) and is for a
+> fixed frame (no `random` payload). A committed prebuilt
+> (`server/prebuilds/<plat>-<arch>/node-v<ABI>/sendqueue.node`) is placed at startup
+> by `tools/cap-prebuilt.js`; rebuild with `npm run setup:winfast`.
 
 **Recommendation:** for true 1 G/10 G generation **and** accurate measurement
 (latency / IAT / loss via `rxcap`), use the Linux fast engine — it is already

@@ -36,9 +36,10 @@ router.get('/packet/engines', (req, res) => {
     ok: true,
     default: 'cap',
     engines: {
-      cap:     { available: pb.isAvailable(),        label: 'cap (libpcap/Npcap)', send: pb.isAvailable(), capture: pb.isAvailable() },
-      tcpdump: { available: pb.isTcpdumpAvailable(),  label: 'tcpdump fallback',    send: false,            capture: pb.isTcpdumpAvailable() },
-      fast:    { available: !!fi.available,           label: 'fast (txgen/rxcap, Linux)', send: !!(fe && fe.canSend()), capture: !!(fe && fe.canCapture()), note: fi.note || undefined },
+      cap:       { available: pb.isAvailable(),        label: 'cap (libpcap/Npcap)', send: pb.isAvailable(), capture: pb.isAvailable() },
+      tcpdump:   { available: pb.isTcpdumpAvailable(),  label: 'tcpdump fallback',    send: false,            capture: pb.isTcpdumpAvailable() },
+      sendqueue: { available: !!(pb.isFastSendAvailable && pb.isFastSendAvailable()), label: 'sendqueue (Npcap fast TX, Windows)', send: !!(pb.isFastSendAvailable && pb.isFastSendAvailable()), capture: false },
+      fast:      { available: !!fi.available,           label: 'fast (txgen/rxcap, Linux)', send: !!(fe && fe.canSend()), capture: !!(fe && fe.canCapture()), note: fi.note || undefined },
     },
   });
 });

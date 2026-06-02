@@ -61,6 +61,16 @@ are on `main`.
 - **`npm run setup:windows-cap`** + a non-fatal `postinstall` rebuild cap from the
   Npcap SDK when the committed binary doesn't match the platform/ABI. (`2ce68bf`, `a1ad8f8`)
 
+## Windows high-rate TX — Npcap send-queue (engine:"sendqueue")
+- New native addon `server/native/sendqueue` (Npcap `pcap_sendqueue_transmit`):
+  queues many frames and sends them with one driver call per chunk instead of one
+  `pcap_sendpacket` per packet. Exposed as `engine:"sendqueue"` on `/api/send` and
+  reported by `/api/packet/engines`. Measured ~0.43–0.66 Gbps @1514B on a USB
+  2.5GbE NIC (~4–5× the per-packet path; USB-adapter limited, not software).
+  Prebuilt shipped under `server/prebuilds/.../sendqueue.node` and placed at startup
+  by `tools/cap-prebuilt.js`; rebuild via `npm run setup:winfast`. See
+  `docs/PERFORMANCE.md`.
+
 ## Optional Linux fast engine (txgen/rxcap)
 - `services/fastEngine.js` + `GET /api/packet/engines` + `engine:"fast"` on
   `/api/send` + `POST /api/capture/measure`. Gated to Linux + installed binaries;

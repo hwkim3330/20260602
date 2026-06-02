@@ -17,6 +17,14 @@ const { buildFrame } = require('./frameBuilder');
 let Cap;
 try { Cap = require('cap').Cap; } catch {}
 
+// Optional Windows high-rate TX via the Npcap send-queue addon (built separately;
+// see server/native/sendqueue). Sends many frames per driver call instead of one
+// pcap_sendpacket per packet — ~4-5x faster on this stack. Absent → falls back to
+// the normal per-packet cap.send path.
+let _sq;
+try { _sq = require('../native/sendqueue/build/Release/sendqueue.node'); } catch {}
+function isFastSendAvailable() { return !!_sq; }
+
 // ── Device resolution ──────────────────────────────────────────────────────────
 
 function getDeviceList() {
@@ -355,6 +363,28 @@ async function sendPackets(profile) {
 
   // UI-facing interface label (OS name) — may differ from the pcap device name.
   const label = profile.interface || dev;
+
+  // Optional Windows high-rate burst via the Npcap send-queue addon
+  // (engine:"sendqueue"): build the frame once and blast `count` copies with one
+  // driver call per chunk. ~4-5x faster than per-packet cap.send. Only for a fixed
+  // frame (no 'random' payload). NOTE: synchronous — blocks until the burst ends.
+  if (_sq && profile.engine === 'sendqueue' && !_payloadVaries(profile)) {
+    const frame = buildFrame(profile, 0);
+    if (frame.length > 65535) throw new Error(`Frame too large: ${frame.length} bytes`);
+    _sendInFlight.add(dev);
+    try {
+      _registerTxEcho(dev, frame);
+      const chunk = Math.max(1, Math.min(profile.chunk || 4000, 60000));
+      const r = _sq.transmit(dev, frame, count, chunk, profile.sync ? 1 : 0);
+      if (!r || !r.ok) throw new Error('send-queue transmit failed: ' + ((r && r.error) || 'unknown'));
+      _recordTxFrame(dev, label, frame); // single representative TX row
+      return { framesSent: r.frames, bytesSent: r.bytes, engine: 'sendqueue' };
+    } catch (err) {
+      throw err;
+    } finally {
+      _sendInFlight.delete(dev);
+    }
+  }
 
   // High-throughput path: for large bursts, build the frame ONCE and reuse it,
   // and skip per-packet capture bookkeeping (decode + sorted insert) which
@@ -701,5 +731,5 @@ module.exports = {
   getCaptureDeviceNames, clearCapture, getCaptures, getCaptureStatus,
   addStreamCallback, removeStreamCallback,
   listInterfaces, resolveDevice, isAvailable, isTcpdumpAvailable, decodeFrame,
-  getLastCaptureError, buildIfaceBpfFilter,
+  getLastCaptureError, buildIfaceBpfFilter, isFastSendAvailable,
 };

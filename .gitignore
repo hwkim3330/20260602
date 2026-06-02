@@ -5,6 +5,11 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 
+# Native addon build artifacts & vendored SDK (the loadable binary is shipped as
+# a prebuilt under server/prebuilds/ and placed at startup by tools/cap-prebuilt.js)
+server/native/sendqueue/build/
+server/native/sendqueue/deps/
+
 # Env (secrets)
 .env
 .env.local
