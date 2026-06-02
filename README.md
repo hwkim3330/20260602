@@ -156,6 +156,8 @@ Base URL: `http://localhost:8080/api`
 | GET | `/capture/packets` | 캡처된 패킷 목록 (`?limit=&offset=`) |
 | POST | `/capture/clear` | 캡처 버퍼 초기화 |
 | POST | `/simple-bidir-forward-test` | 2-PC 양방향 포워딩 테스트 |
+| GET | `/packet/engines` | 사용 가능한 송신/캡처 엔진 조회 (cap / tcpdump / fast) |
+| POST | `/capture/measure` | (선택) rxcap 측정 캡처 — Linux 고속 엔진 |
 | GET | `/portmap` | 포트 매핑 조회 |
 | POST | `/portmap` | 포트 매핑 저장 |
 | GET | `/tty/list` | 시리얼 포트 목록 |
@@ -178,6 +180,34 @@ Base URL: `http://localhost:8080/api`
 | GET | `/timestamp/read` | 타임스탬프 레지스터 읽기 |
 | GET | `/backend/status` | 서버·패킷·시리얼 상태 요약 |
 | GET | `/health` | 서버 헬스 체크 |
+
+---
+
+## 고속 엔진 (선택) — traffic-generator (Linux)
+
+기본 송신/캡처는 `cap`(libpcap/Npcap) 경로를 그대로 사용합니다. Linux에서 **대용량·고PPS
+송신**이나 **지연/IAT/손실 측정 캡처**가 필요하면, 별도 C 도구
+[`traffic-generator`](https://github.com/hwkim3330/traffic-generator)의
+`txgen`(고속 송신) / `rxcap`(측정 캡처)을 **선택적 엔진**으로 붙일 수 있습니다.
+
+- 새 탭이 아니라 기존 **Packet Generator / Capture** 안에서 확장됩니다.
+- `txgen`/`rxcap` 바이너리가 PATH에 있을 때만 활성화됩니다(없으면 자동으로 cap 경로 사용).
+- Packet Generator 송신 줄의 **엔진** 셀렉터(cap / fast)는 fast 엔진이 감지될 때만 표시됩니다.
+
+```bash
+# 1) traffic-generator 빌드
+git clone https://github.com/hwkim3330/traffic-generator.git
+cd traffic-generator && make && sudo make install   # txgen/rxcap → /usr/local/bin
+
+# 2) PacketLabManager 서버에서 감지 확인
+curl localhost:8080/api/packet/engines      # engines.fast.available == true 면 사용 가능
+
+# 3) 고속 송신:  POST /api/send  { ..., "engine":"fast", "rateMbps":1000 }
+#    측정 캡처:  POST /api/capture/measure  { "interface":"eth1", "durationSec":30, "seq":true, "latency":true }
+```
+
+> 바이너리 경로를 직접 지정하려면 `PLM_TXGEN`, `PLM_RXCAP` 환경변수를 사용하세요.
+> 비-Linux/미설치 환경에서는 fast 엔진 호출이 명확한 503 에러를 반환하며, 기본 cap 경로는 영향받지 않습니다.
 
 ---
 

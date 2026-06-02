@@ -26,6 +26,7 @@ const os   = require('os');
 const serialBridge   = require('./services/serialBridge');
 const switchProtocol = require('./services/switchProtocol');
 const packetBackend  = require('./services/packetBackend');
+const fastEngine     = require('./services/fastEngine');
 const nativeWorker   = require('./services/nativeWorker');
 const autoEngine     = require('./services/autoEngine');
 const { timeoutSignal, httpFetch } = require('./services/httpUtil');
@@ -51,6 +52,7 @@ app.locals.reportsDir     = reportsDir;
 app.locals.serialBridge   = serialBridge;
 app.locals.switchProtocol = switchProtocol;
 app.locals.packetBackend  = packetBackend;
+app.locals.fastEngine     = fastEngine;
 app.locals.autoEngine     = autoEngine;
 
 // Initialize autoEngine with services and storage dir
@@ -249,4 +251,7 @@ server.listen(PORT, '0.0.0.0', () => {
       ? 'no cap npm — tcpdump fallback active (capture only)'
       : 'no cap npm, no tcpdump — packet features unavailable';
   console.log(`[PacketLabManager] Packets : ${capStatus}`);
+  const fe = fastEngine.info();
+  if (fe.available)
+    console.log(`[PacketLabManager] Fast    : optional Linux engine ready (txgen:${!!fe.txgen} rxcap:${!!fe.rxcap})`);
 });

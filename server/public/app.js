@@ -819,8 +819,27 @@ function buildPacketPayload(pkt) {
                          targetMac: arpB.targetMac || '00:00:00:00:00:00',
                          targetIp:  arpB.targetIp  || '0.0.0.0' };
   if (vlanB) p.vlan = { enabled: true, id: Number(vlanB.vlanId) || 100, priority: Number(vlanB.priority) || 0 };
+  // Optional send engine (default 'cap' — Basic Packet Send unchanged). The
+  // selector is only visible when the Linux fast engine (txgen) is available.
+  const engine = $('pgEngine')?.value;
+  if (engine && engine !== 'cap') p.engine = engine;
   p.blocks = blocks;
   return p;
+}
+
+// Reveal the Packet Generator engine selector only when the optional Linux fast
+// engine (txgen) is actually available on the server; otherwise stay hidden so
+// the default cap (libpcap/Npcap) path is used transparently.
+async function initEngineSelector() {
+  try {
+    const data = await api('/api/packet/engines');
+    const fast = data?.engines?.fast;
+    if (fast?.available && fast?.send) {
+      const wrap = $('pgEngineWrap'), sel = $('pgEngine');
+      if (wrap) wrap.style.display = '';
+      if (sel)  sel.style.display = '';
+    }
+  } catch { /* fast engine optional — ignore */ }
 }
 
 function buildProfile() {
@@ -4807,6 +4826,7 @@ async function init() {
   $('send')?.addEventListener('click', sendFrame);
   ['protocol','dstMac','srcMac','srcIp','dstIp','srcPort','dstPort','payload','vlanEnabled','vlanId','vlanPriority']
     .forEach(id=>$(id)?.addEventListener('change',previewFrame));
+  initEngineSelector(); // reveal fast-engine option only when available
 
   // Capture
   $('captureRefresh')?.addEventListener('click', refreshCaptureStatus);

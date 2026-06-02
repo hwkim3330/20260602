@@ -186,4 +186,17 @@ router.post('/capture-stream', async (req, res) => {
   req.on('close', () => { clearTimeout(timer); stop(); });
 });
 
+// POST /api/capture/measure — OPTIONAL high-rate measurement capture via the
+// Linux rxcap engine (latency/IAT/seq-loss/PCP stats). Separate from the default
+// cap/tcpdump live capture above; only usable when the fast engine is present.
+router.post('/capture/measure', async (req, res) => {
+  const fe = req.app.locals.fastEngine;
+  if (!fe || !fe.canCapture())
+    return res.status(503).json({ ok: false, error: (fe && fe.info().note) || 'fast capture (rxcap) not available — Linux + traffic-generator required' });
+  try {
+    const result = await fe.captureMeasure(req.body || {});
+    res.json({ ok: true, ...result });
+  } catch (err) { workerErr(res, err); }
+});
+
 module.exports = router;

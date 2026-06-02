@@ -94,6 +94,11 @@
               <label class="check-inline"><input id="pgRepeat" type="checkbox"> Repeat</label>
               <span class="muted-label">주기(ms):</span>
               <input id="pgPeriod" type="number" min="0" value="0" style="width:65px;" title="패킷 간 전송 간격 (ms)">
+              <span class="muted-label" id="pgEngineWrap" style="display:none;">엔진:</span>
+              <select id="pgEngine" style="display:none;" title="송신 엔진 — cap(기본, libpcap/Npcap) / fast(Linux txgen 고속 송신)">
+                <option value="cap">cap</option>
+                <option value="fast">fast (Linux)</option>
+              </select>
             </div>
           </div>
           <div class="table-area">
