@@ -38,8 +38,12 @@ function payloadBytes(p, seq) {
     for (let i = 0; i < len; i++) b[i] = Math.random() * 256 | 0;
     return b;
   }
-  let text = pl.data || pl.text || '';
-  if (seq != null) text += `_${seq}`;
+  // NOTE: the payload is emitted exactly as given. We deliberately do NOT append
+  // a "_<seq>" suffix — that silently changed the frame size (e.g. a 1472-byte
+  // payload became 1474, pushing a "1514-byte" frame to 1516 and over the Ethernet
+  // max so the NIC rejected it), and made frame sizes vary across a burst, which
+  // skews throughput/measurement. Use payload mode 'random' for per-packet variety.
+  const text = pl.data || pl.text || '';
   return Buffer.from(text, 'utf8');
 }
 
@@ -210,9 +214,9 @@ function buildFrameFromBlocks(blocks, profile, seq) {
       for (let k = 0; k < len; k++) buf[k] = Math.random() * 256 | 0;
       return buf;
     }
-    let text = b.data || '';
-    if (seq != null) text += `_${seq}`;
-    return Buffer.from(text, 'utf8');
+    // Emit payload exactly as given (no "_<seq>" suffix — see payloadBytes note):
+    // keeps frame size exact/deterministic so max-size (1514) sends don't overflow.
+    return Buffer.from(b.data || '', 'utf8');
   });
 
   // Fixed header sizes per block type (each block contributes only its header)

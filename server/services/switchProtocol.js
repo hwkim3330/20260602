@@ -203,7 +203,10 @@ async function fdbDelete(payload) {
   const sid    = serialBridge.getSession(payload.session);
   const mac    = payload.mac || '00:00:00:00:00:00';
   const vlanId = payload.vlanId ?? 0;
-  const valid  = vlanId > 0;
+  // Honor an explicit vlanValid (matches fdbRead/fdbWrite); otherwise derive from
+  // vlanId. Previously this ignored vlanValid, so a valid entry with vlanId=0
+  // built a different lookup key and the delete silently failed to match.
+  const valid  = payload.vlanValid ?? (vlanId > 0);
 
   await setMacAddress(sid, mac);
   await writeRegister(sid, FDB.OFF_MCU_VLAN,

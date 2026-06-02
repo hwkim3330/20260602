@@ -134,10 +134,17 @@ class SerialSession {
     for (const line of parts) {
       const t = line.trim();
       if (!t) continue;
-      if (this._cmdQueue.length > 0 && (t.startsWith('OK') || t.startsWith('ERR'))) {
-        const { resolve: res, reject: rej, timer } = this._cmdQueue.shift();
-        clearTimeout(timer);
-        if (t.startsWith('OK')) res(t.slice(2).trim()); else rej(new Error(t.slice(3).trim() || 'ERR'));
+      if (t.startsWith('OK') || t.startsWith('ERR')) {
+        // Drop the late response of a command that already timed out, so it isn't
+        // mis-attributed to the NEXT queued command (which would silently return a
+        // wrong register/FDB value). Each timeout registers a short-lived slot.
+        this._staleExpiries = (this._staleExpiries || []).filter(e => e > Date.now());
+        if (this._staleExpiries.length) { this._staleExpiries.shift(); continue; }
+        if (this._cmdQueue.length > 0) {
+          const { resolve: res, reject: rej, timer } = this._cmdQueue.shift();
+          clearTimeout(timer);
+          if (t.startsWith('OK')) res(t.slice(2).trim()); else rej(new Error(t.slice(3).trim() || 'ERR'));
+        }
       }
     }
   }
@@ -167,7 +174,11 @@ class SerialSession {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         const i = this._cmdQueue.findIndex(q => q.timer === timer);
-        if (i >= 0) this._cmdQueue.splice(i, 1);
+        if (i >= 0) {
+          this._cmdQueue.splice(i, 1);
+          // Expect (and later discard) this command's late response for ~1.5s.
+          (this._staleExpiries = this._staleExpiries || []).push(Date.now() + 1500);
+        }
         reject(new Error('Serial command timeout'));
       }, timeoutMs);
       this._cmdQueue.push({ resolve, reject, timer });
@@ -250,10 +261,15 @@ class SttySession {
           for (const line of parts) {
             const t = line.trim();
             if (!t) continue;
-            if (this._cmdQueue.length > 0 && (t.startsWith('OK') || t.startsWith('ERR'))) {
-              const { resolve: res, reject: rej, timer } = this._cmdQueue.shift();
-              clearTimeout(timer);
-              if (t.startsWith('OK')) res(t.slice(2).trim()); else rej(new Error(t.slice(3).trim() || 'ERR'));
+            if (t.startsWith('OK') || t.startsWith('ERR')) {
+              // Drop a timed-out command's late response (avoid FIFO desync).
+              this._staleExpiries = (this._staleExpiries || []).filter(e => e > Date.now());
+              if (this._staleExpiries.length) { this._staleExpiries.shift(); continue; }
+              if (this._cmdQueue.length > 0) {
+                const { resolve: res, reject: rej, timer } = this._cmdQueue.shift();
+                clearTimeout(timer);
+                if (t.startsWith('OK')) res(t.slice(2).trim()); else rej(new Error(t.slice(3).trim() || 'ERR'));
+              }
             }
           }
         }
@@ -291,7 +307,11 @@ class SttySession {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         const i = this._cmdQueue.findIndex(q => q.timer === timer);
-        if (i >= 0) this._cmdQueue.splice(i, 1);
+        if (i >= 0) {
+          this._cmdQueue.splice(i, 1);
+          // Expect (and later discard) this command's late response for ~1.5s.
+          (this._staleExpiries = this._staleExpiries || []).push(Date.now() + 1500);
+        }
         reject(new Error('Serial command timeout'));
       }, timeoutMs);
       this._cmdQueue.push({ resolve, reject, timer });

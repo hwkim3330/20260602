@@ -5589,20 +5589,6 @@ function _matchMarker(rows, marker) {
   );
 }
 
-// Deduplicate captured rows by timestamp (1 ms resolution).
-// Fixes switch-level broadcast duplication where the same physical frame
-// arrives at multiple ports and is captured multiple times.
-// Works correctly when intervalMs >= 1 (each packet has a unique ms timestamp).
-function _dedupByTimestamp(matched) {
-  const seen = new Set();
-  let count = 0;
-  for (const row of matched) {
-    const ts1ms = Math.round((row.timestamp || 0) * 1000);
-    if (!seen.has(ts1ms)) { seen.add(ts1ms); count++; }
-  }
-  return count;
-}
-
 async function runBenchPDR(sUrl, sIface, rUrl, rIface, count, intervalMs, payloadSize, capMs) {
   const rIsRemote = _benchIsRemote(rUrl);
   const dstMac    = _benchGetMac(rIface, rIsRemote);
@@ -5625,8 +5611,10 @@ async function runBenchPDR(sUrl, sIface, rUrl, rIface, count, intervalMs, payloa
   const rows     = capData.rows || [];
   const matched  = _matchMarker(rows, marker);
 
-  // Use timestamp dedup when interval >= 1ms; raw count otherwise
-  const received = intervalMs >= 1 ? _dedupByTimestamp(matched) : matched.length;
+  // Count received frames directly. (Previously deduped by 1ms timestamp, but cap
+  // capture timestamps are Date.now()/1000 = ms resolution, so above ~1000 pps
+  // distinct frames sharing a millisecond were merged → false packet loss.)
+  const received = matched.length;
 
   const pdr     = count > 0 ? Math.min(100, (received / count) * 100) : 0;
   const sendSec = Math.max(sendMs / 1000, 0.001);
