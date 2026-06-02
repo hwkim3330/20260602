@@ -72,6 +72,28 @@ limit is the **USB 2.5GbE adapter / USB path**, not the software — a PCIe NIC
 would likely reach 1 Gbps line rate. JS is not the bottleneck: it only builds
 the frame once; the addon does the batched transmit.
 
+## Real over-the-wire test (Windows → Linux, 2.5GbE link)
+
+Validated against a Linux box (PacketLabManager, tcpdump capture) directly cabled
+to the Windows USB 2.5GbE NIC. Cabling discovered by sending a marked broadcast:
+
+| Windows NIC | ↔ | Linux NIC |
+|---|---|---|
+| 이더넷 (2.5G, c8:4d:44:26:3b:a6) | ↔ | enp1s0f1 |
+| 이더넷 2 (1G, c8:4d:44:20:40:5b) | ↔ | enp1s0f3 |
+
+Windows `engine:"sendqueue"` → Linux capture (enp1s0f1), 1514 B unicast:
+
+| TX | Wire rate | Linux captured |
+|---:|----------:|---------------:|
+| 20,000 frames | 540 Mbps | 16,002 (80%) |
+| 100,000 frames | 761 Mbps | 71,701 (72%) |
+
+Frames genuinely cross the wire (first true end-to-end validation). The ~20–28%
+shortfall is the **Linux tcpdump + JS-decode capture path dropping** at >0.5 Gbps,
+not wire loss — accurate counting at line rate needs **rxcap** (AF_PACKET batch +
+`SO_RXQ_OVFL` kernel-drop counting), which must be built on the Linux box.
+
 ## Bottom line
 
 | Path | 1 Gbps | 10 Gbps |
