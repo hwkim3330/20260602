@@ -59,7 +59,9 @@ function buildUDP(p, seq) {
   const pseudo = Buffer.concat([srcIp, dstIp, Buffer.from([0, 17]), u16be(len)]);
   const full   = Buffer.concat([pseudo, hdr, data]);
   const cs     = checksum(full);
-  hdr.writeUInt16BE(cs, 6);
+  // RFC 768: a computed checksum of 0 must be transmitted as 0xFFFF, since an
+  // all-zero UDP checksum means "no checksum present".
+  hdr.writeUInt16BE(cs || 0xFFFF, 6);
   return Buffer.concat([hdr, data]);
 }
 
@@ -271,7 +273,8 @@ function buildFrameFromBlocks(blocks, profile, seq) {
         const dstIp = ipBytes(profile.ipv4?.dst || '0.0.0.0');
         const hdr   = Buffer.concat([u16be(u.srcPort ?? 40000), u16be(u.dstPort ?? 50000), u16be(len), u16be(0)]);
         const pseudo = Buffer.concat([srcIp, dstIp, Buffer.from([0, 17]), u16be(len)]);
-        hdr.writeUInt16BE(checksum(Buffer.concat([pseudo, hdr, after])), 6);
+        // RFC 768: transmit 0xFFFF when the computed checksum is 0.
+        hdr.writeUInt16BE(checksum(Buffer.concat([pseudo, hdr, after])) || 0xFFFF, 6);
         parts.push(hdr);
         break;
       }

@@ -123,6 +123,9 @@ async function runTest(testName) {
     _state.statusText = `Error: ${e.message}`;
     _state.rows.push({ step: -1, name: 'error', result: 'FAIL', detail: e.message });
   } finally {
+    // Ensure no capture handle is left running — a look-ahead pre-start followed
+    // by a stop (or an exception) before the rxverify step would otherwise leak it.
+    try { _services?.packetBackend?.stopCapture(); } catch {}
     _state.running = false;
   }
 }
@@ -331,7 +334,10 @@ async function runStep(step, ctx = {}) {
           const entry = portmap.find(e => e.iface === pkt.interface);
           if (entry !== undefined) receivedPorts.add(Number(entry.port));
         }
-        if (expectedPorts.every(p => receivedPorts.has(p))) break;
+        // Early-exit only when ports are actually expected; for the "expect no
+        // reception" case (expectedPorts empty) `[].every` is vacuously true and
+        // would break after the first 200ms poll — keep watching the full window.
+        if (expectedPorts.length && expectedPorts.every(p => receivedPorts.has(p))) break;
       }
       packetBackend.stopCapture();
 

@@ -17,7 +17,7 @@ function makeMacroId() {
 router.post('/macro/packet-flow/start', (req, res) => {
   try {
     const macroId = makeMacroId();
-    const { ports = [1, 2, 3], ...rest } = req.body;
+    const { ports = [1, 2, 3], ...rest } = req.body || {};
 
     const steps = ports.map((port, i) => ({
       step:               i + 1,

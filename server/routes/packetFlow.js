@@ -31,9 +31,10 @@ router.post('/packet-flow/start', (req, res) => {
 // POST /api/packet-flow/result
 router.post('/packet-flow/result', (req, res) => {
   try {
-    const { testId } = req.body;
+    const body       = req.body || {};
+    const { testId } = body;
     const testsDir   = req.app.locals.testsDir;
-    const record     = { savedAt: new Date().toISOString(), ...req.body };
+    const record     = { savedAt: new Date().toISOString(), ...body };
 
     const filename = `${testId || makeTestId()}.json`;
     fs.writeFileSync(path.join(testsDir, filename), JSON.stringify(record, null, 2));

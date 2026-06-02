@@ -23,6 +23,10 @@ router.post('/auto/run', async (req, res) => {
   try {
     const test = req.body?.test;
     if (!test) return res.status(400).json({ ok: false, error: 'test required' });
+    // Don't report "started" when a run is already active — runTest would reject
+    // and the .catch() below would otherwise swallow it silently.
+    if (req.app.locals.autoEngine.getStatus().running)
+      return res.status(409).json({ ok: false, error: 'A test is already running' });
     // Fire and forget — client polls /auto/status
     req.app.locals.autoEngine.runTest(test).catch(() => {});
     res.json({ ok: true, test, status: 'started' });
