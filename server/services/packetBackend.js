@@ -522,6 +522,17 @@ let captureSeq  = 0;
 let captureRows = [];
 let captureStreamCbs = [];
 
+// Hard cap on retained capture rows. A long-running capture on a busy interface
+// otherwise grows captureRows without bound (each row holds the frame hex +
+// decoded object), exhausting the V8 heap and crashing the process (OOM). Keep
+// only the most recent MAX_CAPTURE_ROWS; drop the oldest as new frames arrive.
+// Override with PLM_MAX_CAPTURE_ROWS=0 to disable the cap (unbounded, legacy).
+const MAX_CAPTURE_ROWS = (() => {
+  const v = Number(process.env.PLM_MAX_CAPTURE_ROWS);
+  return Number.isFinite(v) && v >= 0 ? v : 50000;
+})();
+let captureDropped = 0; // count of oldest rows evicted by the cap (for status/UX)
+
 // ── BPF filter helpers ─────────────────────────────────────────────────────────
 
 function getIfaceMac(ifaceName) {
@@ -602,7 +613,7 @@ function buildIfaceBpfFilter(ifaceNames) {
   return `(${[...dstClauses, 'broadcast', 'multicast'].join(' or ')})`;
 }
 
-function clearCapture() { captureSeq = 0; captureRows = []; _recentTxHexes.clear(); }
+function clearCapture() { captureSeq = 0; captureRows = []; captureDropped = 0; _recentTxHexes.clear(); }
 
 // Dedup set: TX frames registered here are suppressed once if libpcap also captures them
 const _recentTxHexes = new Map(); // key: dev+hex → expiry timestamp
@@ -632,16 +643,23 @@ function insertCaptureSorted(record) {
   // Fast path: most packets arrive in order
   if (!captureRows.length || ts >= captureRows[captureRows.length - 1].timestamp) {
     captureRows.push(record);
-    return;
+  } else {
+    // Binary search for insertion point
+    let lo = 0, hi = captureRows.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (captureRows[mid].timestamp <= ts) lo = mid + 1;
+      else hi = mid;
+    }
+    captureRows.splice(lo, 0, record);
   }
-  // Binary search for insertion point
-  let lo = 0, hi = captureRows.length;
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1;
-    if (captureRows[mid].timestamp <= ts) lo = mid + 1;
-    else hi = mid;
+  // Enforce the ring-buffer cap: evict oldest rows so a long capture on a busy
+  // link can't grow the heap without bound. Batch-splice to keep this O(n) rare.
+  if (MAX_CAPTURE_ROWS > 0 && captureRows.length > MAX_CAPTURE_ROWS) {
+    const evict = captureRows.length - MAX_CAPTURE_ROWS;
+    captureRows.splice(0, evict);
+    captureDropped += evict;
   }
-  captureRows.splice(lo, 0, record);
 }
 
 function getCaptures(limit = 1000, offset = 0) {
@@ -655,6 +673,8 @@ function getCaptureStatus(ifaceNames) {
     // too, otherwise the UI shows "idle" while packets are streaming in.
     capturing:          activeCaptures.size > 0 || activeTcpdump.size > 0,
     captureCount:       captureRows.length,
+    captureDropped:     captureDropped,
+    captureCap:         MAX_CAPTURE_ROWS,
     captureInterfaces:  ifaceNames ?? getActiveCaptureLabels(),
   };
 }
