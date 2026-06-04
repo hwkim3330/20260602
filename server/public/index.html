@@ -2001,6 +2001,44 @@
           </div>
         </div>
 
+        <!-- ── SWITCH / NETWORK ─────────────────────────────────────────────── -->
+        <div class="st-card" style="margin-top:16px;">
+          <div class="st-card-head">
+            SWITCH / NETWORK
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+              <span id="switchSt" class="reg-status"></span>
+              <button class="small primary" id="switchSave">Save</button>
+            </div>
+          </div>
+          <div class="st-card-body">
+            <!-- mgmt IP + reachability -->
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
+              <span style="font-size:10px;color:var(--muted);white-space:nowrap;">관리 IP</span>
+              <input id="switchIp" type="text" value="192.168.100.1" style="max-width:160px;" placeholder="192.168.100.1">
+              <button class="small" id="switchProbe">상태 확인</button>
+              <button class="small" id="switchOpen">웹 UI 열기</button>
+              <span id="switchPorts" style="font-size:10px;color:var(--muted);"></span>
+            </div>
+
+            <!-- two-NIC switch forwarding test (no 2nd PC) -->
+            <div style="border-top:1px solid var(--border);padding-top:10px;">
+              <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">
+                스위치 포워딩 테스트 — 두 로컬 포트로 마킹 프레임을 주고받아 스위치 L2 전달을 검증 (2번째 PC 불필요)
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                <span style="font-size:10px;color:var(--muted);">포트 A</span>
+                <select id="fwdIfaceA" style="max-width:200px;"></select>
+                <span style="font-size:10px;color:var(--muted);">↔ 포트 B</span>
+                <select id="fwdIfaceB" style="max-width:200px;"></select>
+                <span style="font-size:10px;color:var(--muted);">프레임 수</span>
+                <input id="fwdCount" type="number" value="5" min="1" max="100" style="width:64px;">
+                <button class="small primary" id="fwdRun">테스트 실행</button>
+              </div>
+              <div id="fwdResult" style="font-size:11px;margin-top:8px;"></div>
+            </div>
+          </div>
+        </div>
+
         <!-- ── 2-PC EXPERIMENT ───────────────────────────────────────────────── -->
         <div class="st-card" style="margin-top:16px;">
           <div class="st-card-head">

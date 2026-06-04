@@ -4815,6 +4815,70 @@ function initWebSocket() {
   ws.onclose=()=>setTimeout(initWebSocket,3000);
 }
 
+// ── Switch / Network settings ───────────────────────────────────────────────
+function fillIfaceSelect(sel, selected) {
+  if (!sel) return;
+  const ifaces = (state.interfaces || []).filter(i => i.state !== 'down');
+  sel.innerHTML = ifaces.map(i => `<option value="${i.name}">${i.name}${i.ipv4 && i.ipv4[0] ? ' ('+i.ipv4[0]+')' : ''}</option>`).join('');
+  if (selected && ifaces.some(i => i.name === selected)) sel.value = selected;
+}
+
+async function loadSwitchSettings() {
+  try {
+    if (!(state.interfaces || []).length) {
+      try { const d = await api('/api/interfaces'); state.interfaces = d.interfaces || []; } catch {}
+    }
+    const { settings } = await api('/api/settings');
+    if (settings?.switchIp) $('switchIp').value = settings.switchIp;
+    fillIfaceSelect($('fwdIfaceA'), settings?.fwdIfaceA);
+    fillIfaceSelect($('fwdIfaceB'), settings?.fwdIfaceB);
+    // default B to a different iface than A when unset
+    const a = $('fwdIfaceA'), b = $('fwdIfaceB');
+    if (a && b && a.value === b.value && b.options.length > 1) b.selectedIndex = 1;
+  } catch (e) { /* settings optional */ }
+}
+
+async function saveSwitchSettings() {
+  const st = $('switchSt');
+  try {
+    const settings = {
+      switchIp:  $('switchIp')?.value?.trim() || '',
+      fwdIfaceA: $('fwdIfaceA')?.value || '',
+      fwdIfaceB: $('fwdIfaceB')?.value || '',
+    };
+    await api('/api/settings', { method: 'POST', body: JSON.stringify({ settings }) });
+    if (st) { st.textContent = '저장됨'; setTimeout(() => st.textContent = '', 1500); }
+  } catch (e) { if (st) st.textContent = 'ERR ' + e.message; }
+}
+
+async function probeSwitch() {
+  const ip = $('switchIp')?.value?.trim();
+  const out = $('switchPorts');
+  if (!ip) { if (out) out.textContent = 'IP 입력'; return; }
+  if (out) out.textContent = '확인 중…';
+  try {
+    const r = await api(`/api/net/probe?host=${encodeURIComponent(ip)}&ports=22,23,80,443,161`);
+    const open = Object.entries(r.ports || {}).map(([p, v]) => `${p}:${v ? 'open' : '–'}`).join('  ');
+    if (out) out.textContent = (r.reachable ? '✓ 도달 ' : '✗ 응답없음 ') + open;
+  } catch (e) { if (out) out.textContent = 'ERR ' + e.message; }
+}
+
+async function runSwitchFwdTest() {
+  const out = $('fwdResult');
+  const ifaceA = $('fwdIfaceA')?.value, ifaceB = $('fwdIfaceB')?.value;
+  if (!ifaceA || !ifaceB) { if (out) out.textContent = '포트 선택'; return; }
+  if (ifaceA === ifaceB) { if (out) out.innerHTML = '<span style="color:var(--danger)">A와 B는 다른 포트여야 합니다</span>'; return; }
+  const count = Number($('fwdCount')?.value) || 5;
+  if (out) out.textContent = '테스트 중… (캡처 + 송신)';
+  try {
+    const r = await api('/api/switch-forward-test', { method: 'POST', body: JSON.stringify({ ifaceA, ifaceB, count }) });
+    const color = r.overall === 'PASS' ? 'var(--success, #3fb950)' : 'var(--danger, #f85149)';
+    const rows = (r.directions || []).map(d =>
+      `<div>${d.from} → ${d.to}: <b style="color:${d.result === 'PASS' ? 'var(--success,#3fb950)' : 'var(--danger,#f85149)'}">${d.result}</b> (전달 ${d.matchedOnDst}/${d.sent})</div>`).join('');
+    if (out) out.innerHTML = `<b style="color:${color}">전체: ${r.overall}</b>${rows}`;
+  } catch (e) { if (out) out.innerHTML = `<span style="color:var(--danger,#f85149)">ERR ${e.message}</span>`; }
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
   initTabs();
@@ -4920,6 +4984,13 @@ async function init() {
   $('portmapReload')?.addEventListener('click', loadPortMap);
   $('portmapSave')?.addEventListener('click', savePortMap);
   $('portmapProbeB')?.addEventListener('click', probePortMapB);
+
+  // Switch / Network
+  $('switchSave')?.addEventListener('click', saveSwitchSettings);
+  $('switchProbe')?.addEventListener('click', probeSwitch);
+  $('switchOpen')?.addEventListener('click', () => { const ip = $('switchIp')?.value?.trim(); if (ip) window.open('http://' + ip, '_blank'); });
+  $('fwdRun')?.addEventListener('click', runSwitchFwdTest);
+  loadSwitchSettings();
 
   // 2-PC Experiment
   $('twoPcProbeA')?.addEventListener('click', () => twoPcProbe('A'));
