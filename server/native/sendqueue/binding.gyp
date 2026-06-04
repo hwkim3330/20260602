@@ -17,7 +17,7 @@
           }
         }, {
           "defines": [ "_GNU_SOURCE" ],
-          "cflags_cc": [ "-O2", "-std=c++17" ]
+          "cflags_cc": [ "-O2", "-std=c++20" ]
         } ]
       ]
     }
